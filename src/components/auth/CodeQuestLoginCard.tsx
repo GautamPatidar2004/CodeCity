@@ -37,8 +37,8 @@ export const CodeQuestLoginCard: React.FC<CodeQuestLoginCardProps> = ({
   }
 
   // Quick Demo Auto-Fill helper for effortless testing
-  const handleQuickDemoFill = (roleType: 'learner' | 'admin') => {
-    if (roleType === 'learner') {
+  const handleQuickDemoFill = (roleType: 'student' | 'admin') => {
+    if (roleType === 'student') {
       setEmail('student@codequest.dev')
       setPassword('CodeQuest123!')
     } else {
@@ -86,10 +86,10 @@ export const CodeQuestLoginCard: React.FC<CodeQuestLoginCardProps> = ({
         <div className="flex gap-1.5">
           <button
             type="button"
-            onClick={() => handleQuickDemoFill('learner')}
+            onClick={() => handleQuickDemoFill('student')}
             className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
           >
-            🎓 Learner
+            🎓 Student
           </button>
           <button
             type="button"

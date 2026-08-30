@@ -32,15 +32,3 @@ CREATE POLICY "Users update own showcase" ON public.project_showcases
 CREATE POLICY "Users and admins delete showcase" ON public.project_showcases
   FOR DELETE TO authenticated USING (auth.uid() = user_id OR public.is_admin());
 
--- Seed starter showcases
-INSERT INTO public.project_showcases (id, user_id, project_id, title, description, is_published)
-VALUES
-  (
-    'c1000000-0000-0000-0000-000000000001',
-    'f0000000-0000-0000-0000-000000000001',
-    'b0000000-0000-0000-0000-000000000001',
-    'Cyberpunk Dev Portfolio',
-    'Custom neon-themed responsive developer portfolio built with semantic HTML and modern CSS flexbox layouts.',
-    true
-  )
-ON CONFLICT (user_id, project_id) DO NOTHING;

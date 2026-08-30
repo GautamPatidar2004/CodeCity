@@ -17,6 +17,53 @@ export function calculateLevelFromXp(xp: number): number {
   return Math.max(1, Math.floor(xp / 200) + 1)
 }
 
+export async function updateStreakAndDailyActivity(userId: string): Promise<number> {
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('streak, last_active_date')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!profile) return 0
+
+    const todayStr = new Date().toISOString().split('T')[0]
+    const lastActiveStr = profile.last_active_date ? new Date(profile.last_active_date).toISOString().split('T')[0] : null
+
+    let newStreak = profile.streak || 0
+
+    if (!lastActiveStr) {
+      newStreak = 1
+    } else if (lastActiveStr === todayStr) {
+      newStreak = Math.max(1, newStreak)
+    } else {
+      const todayDate = new Date(todayStr).getTime()
+      const lastDate = new Date(lastActiveStr).getTime()
+      const diffDays = Math.round((todayDate - lastDate) / (1000 * 60 * 60 * 24))
+
+      if (diffDays === 1) {
+        newStreak += 1
+      } else {
+        newStreak = 1
+      }
+    }
+
+    await supabase
+      .from('profiles')
+      .update({
+        streak: newStreak,
+        last_active_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+
+    return newStreak
+  } catch (err) {
+    console.error('Error updating streak:', err)
+    return 0
+  }
+}
+
 export async function awardXp(
   userId: string,
   amount: number,
@@ -32,6 +79,7 @@ export async function awardXp(
     })
 
     if (!error && data) {
+      await updateStreakAndDailyActivity(userId)
       return data as { awarded: boolean; xp: number; level: number; streak: number }
     }
 
@@ -59,11 +107,10 @@ export async function awardXp(
       .from('profiles')
       .select('xp, level, streak, daily_xp_earned')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
 
     const newXp = (currentProfile?.xp ?? 0) + amount
     const newLevel = calculateLevelFromXp(newXp)
-    const newStreak = currentProfile?.streak ?? 1
     const newDailyXp = (currentProfile?.daily_xp_earned ?? 0) + amount
 
     await supabase
@@ -76,6 +123,8 @@ export async function awardXp(
       })
       .eq('id', userId)
 
+    const newStreak = await updateStreakAndDailyActivity(userId)
+
     return { awarded: true, xp: newXp, level: newLevel, streak: newStreak }
   } catch (err) {
     console.error('Error awarding XP:', err)
@@ -84,41 +133,45 @@ export async function awardXp(
 }
 
 export function useGamification(userId?: string, initialXp?: number, initialStreak?: number, initialLevel?: number) {
+  const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<GamificationStats>(() => {
-    const xp = initialXp ?? 120
+    const xp = initialXp ?? 0
     const level = initialLevel ?? calculateLevelFromXp(xp)
-    const streak = initialStreak ?? 3
+    const streak = initialStreak ?? 0
     const dailyGoalXp = 50
-    const dailyXpEarned = 50
+    const dailyXpEarned = 0
     return {
       xp,
       level,
       streak,
       dailyGoalXp,
       dailyXpEarned,
-      dailyGoalCompleted: dailyXpEarned >= dailyGoalXp,
-      dailyGoalPercent: Math.min(100, Math.round((dailyXpEarned / dailyGoalXp) * 100)),
+      dailyGoalCompleted: false,
+      dailyGoalPercent: 0,
       nextLevelXp: level * 200,
       currentLevelBaseXp: (level - 1) * 200,
     }
   })
 
   const loadStats = useCallback(async () => {
-    if (!userId) return
+    if (!userId) {
+      setLoading(false)
+      return
+    }
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('xp, level, streak, daily_goal_xp, daily_xp_earned')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
 
-      if (data) {
-        const xp = data.xp ?? 120
+      if (!error && data) {
+        const xp = data.xp ?? 0
         const level = data.level ?? calculateLevelFromXp(xp)
-        const streak = data.streak ?? 1
-        const dailyGoalXp = data.daily_goal_xp || 50
-        const dailyXpEarned = data.daily_xp_earned || 0
+        const streak = data.streak ?? 0
+        const dailyGoalXp = data.daily_goal_xp ?? 50
+        const dailyXpEarned = data.daily_xp_earned ?? 0
 
         setStats({
           xp,
@@ -126,14 +179,16 @@ export function useGamification(userId?: string, initialXp?: number, initialStre
           streak,
           dailyGoalXp,
           dailyXpEarned,
-          dailyGoalCompleted: dailyXpEarned >= dailyGoalXp,
-          dailyGoalPercent: Math.min(100, Math.round((dailyXpEarned / dailyGoalXp) * 100)),
+          dailyGoalCompleted: dailyGoalXp > 0 && dailyXpEarned >= dailyGoalXp,
+          dailyGoalPercent: dailyGoalXp > 0 ? Math.min(100, Math.round((dailyXpEarned / dailyGoalXp) * 100)) : 0,
           nextLevelXp: level * 200,
           currentLevelBaseXp: (level - 1) * 200,
         })
       }
-    } catch {
-      // Retain current stats
+    } catch (err) {
+      console.error('Error loading gamification stats:', err)
+    } finally {
+      setLoading(false)
     }
   }, [userId])
 
@@ -141,27 +196,19 @@ export function useGamification(userId?: string, initialXp?: number, initialStre
     let mounted = true
     if (userId && mounted) {
       loadStats()
+    } else if (!userId) {
+      setLoading(false)
     }
     return () => {
       mounted = false
     }
   }, [userId, loadStats])
 
-  const triggerXpAward = useCallback(
-    async (amount: number, sourceType: string, sourceId: string) => {
-      if (!userId) return { awarded: false }
-      const res = await awardXp(userId, amount, sourceType, sourceId)
-      if (res.awarded) {
-        await loadStats()
-      }
-      return res
-    },
-    [userId, loadStats]
-  )
-
   return {
     stats,
-    awardXp: triggerXpAward,
+    loading,
+    awardXp: (amount: number, sourceType: string, sourceId: string) =>
+      userId ? awardXp(userId, amount, sourceType, sourceId) : Promise.resolve({ awarded: false }),
     refreshGamification: loadStats,
   }
 }

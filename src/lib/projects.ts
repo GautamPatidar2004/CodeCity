@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabase'
 import { awardXp } from './gamification'
-import { recordUserActivity, createUserNotification } from './achievements'
+import { recordUserActivity, createUserNotification, syncUserBadgesAndAchievements } from './achievements'
 
 export interface ProjectStep {
   id: string
@@ -55,122 +55,6 @@ export interface ProjectShowcase {
   project_title?: string
 }
 
-const FALLBACK_PROJECTS: Project[] = [
-  {
-    id: 'b0000000-0000-0000-0000-000000000001',
-    title: 'Personal Portfolio Website',
-    slug: 'personal-portfolio-website',
-    description: 'Build a clean, responsive developer portfolio showcasing your skills, bio, and featured quests.',
-    instructions: 'Structure your markup with semantic tags, create modern flex/grid layouts with CSS, and deploy to the web.',
-    category: 'Web',
-    difficulty: 'Beginner',
-    is_published: true,
-    steps: [
-      {
-        id: 'b1000000-0000-0000-0000-000000000001',
-        project_id: 'b0000000-0000-0000-0000-000000000001',
-        title: 'Structure Semantic HTML',
-        description: 'Create index.html with a semantic header, about bio, project showcase grid, and contact footer.',
-        step_order: 1,
-      },
-      {
-        id: 'b1000000-0000-0000-0000-000000000002',
-        project_id: 'b0000000-0000-0000-0000-000000000001',
-        title: 'Apply Responsive Styles',
-        description: 'Implement responsive CSS styling with mobile-first media queries and clean typography.',
-        step_order: 2,
-      },
-      {
-        id: 'b1000000-0000-0000-0000-000000000003',
-        project_id: 'b0000000-0000-0000-0000-000000000001',
-        title: 'Add Interactivity & Polish',
-        description: 'Add theme toggle, smooth scrolling navigation, and validation to the contact form.',
-        step_order: 3,
-      },
-    ],
-  },
-  {
-    id: 'b0000000-0000-0000-0000-000000000002',
-    title: 'Interactive Task Matrix',
-    slug: 'interactive-task-matrix',
-    description: 'Create an interactive productivity tracker with state management and local storage persistence.',
-    instructions: 'Implement task creation, toggling completion, filtering views, and persisting task state in localStorage.',
-    category: 'JavaScript',
-    difficulty: 'Beginner',
-    is_published: true,
-    steps: [
-      {
-        id: 'b1000000-0000-0000-0000-000000000004',
-        project_id: 'b0000000-0000-0000-0000-000000000002',
-        title: 'DOM Manipulation & Event Binding',
-        description: 'Create UI input fields and write event listeners to dynamically insert new task cards.',
-        step_order: 1,
-      },
-      {
-        id: 'b1000000-0000-0000-0000-000000000005',
-        project_id: 'b0000000-0000-0000-0000-000000000002',
-        title: 'Local Storage Synchronization',
-        description: 'Serialize task data to JSON and sync to window.localStorage on every mutation.',
-        step_order: 2,
-      },
-      {
-        id: 'b1000000-0000-0000-0000-000000000006',
-        project_id: 'b0000000-0000-0000-0000-000000000002',
-        title: 'Filtering & Active Counts',
-        description: 'Add filter buttons for All, Active, and Completed tasks, plus an active counter indicator.',
-        step_order: 3,
-      },
-    ],
-  },
-  {
-    id: 'b0000000-0000-0000-0000-000000000003',
-    title: 'Markdown Note Engine',
-    slug: 'markdown-note-engine',
-    description: 'Develop a real-time markdown editor with instant preview parsing and category tagging.',
-    instructions: 'Assemble React components with dual-pane layout, controlled editor state, and export options.',
-    category: 'React',
-    difficulty: 'Intermediate',
-    is_published: true,
-    steps: [
-      {
-        id: 'b1000000-0000-0000-0000-000000000007',
-        project_id: 'b0000000-0000-0000-0000-000000000003',
-        title: 'Split-Pane Editor Component',
-        description: 'Build dual-pane React component connecting raw markdown input to rendered preview HTML.',
-        step_order: 1,
-      },
-      {
-        id: 'b1000000-0000-0000-0000-000000000008',
-        project_id: 'b0000000-0000-0000-0000-000000000003',
-        title: 'Category Tagging & Search',
-        description: 'Enable assigning tags to notes and instant client-side searching across notes.',
-        step_order: 2,
-      },
-      {
-        id: 'b1000000-0000-0000-0000-000000000009',
-        project_id: 'b0000000-0000-0000-0000-000000000003',
-        title: 'Export & Download Pipeline',
-        description: 'Support exporting individual notes as .md files and downloading note bundles as JSON.',
-        step_order: 3,
-      },
-    ],
-  },
-]
-
-const FALLBACK_SHOWCASES: ProjectShowcase[] = [
-  {
-    id: 'c1000000-0000-0000-0000-000000000001',
-    user_id: 'f0000000-0000-0000-0000-000000000001',
-    project_id: 'b0000000-0000-0000-0000-000000000001',
-    title: 'Cyberpunk Dev Portfolio',
-    description: 'Custom neon-themed responsive developer portfolio built with semantic HTML and modern CSS flexbox layouts.',
-    is_published: true,
-    author_name: 'Alex Rivers',
-    project_title: 'Personal Portfolio Website',
-    created_at: '2 hours ago',
-  },
-]
-
 export async function fetchProjects(categoryFilter?: string, includeUnpublished = false): Promise<Project[]> {
   try {
     let query = supabase
@@ -200,10 +84,7 @@ export async function fetchProjects(categoryFilter?: string, includeUnpublished 
     const { data, error } = await query
 
     if (error || !data || data.length === 0) {
-      if (categoryFilter && categoryFilter !== 'All') {
-        return FALLBACK_PROJECTS.filter((p) => p.category === categoryFilter)
-      }
-      return FALLBACK_PROJECTS
+      return []
     }
 
     return data.map((item) => ({
@@ -211,7 +92,7 @@ export async function fetchProjects(categoryFilter?: string, includeUnpublished 
       steps: (item.steps || []).sort((a: ProjectStep, b: ProjectStep) => a.step_order - b.step_order),
     }))
   } catch {
-    return FALLBACK_PROJECTS
+    return []
   }
 }
 
@@ -310,32 +191,28 @@ export async function startProject(userId: string, projectId: string, firstStepI
     const now = new Date().toISOString()
     const { data: existing } = await supabase
       .from('project_enrollments')
-      .select('status, is_completed')
+      .select('id, status, is_completed')
       .eq('user_id', userId)
       .eq('project_id', projectId)
       .maybeSingle()
 
     // Prevent completed project from reverting
-    if (existing?.is_completed || existing?.status === 'completed') {
+    if (existing) {
       await supabase
         .from('project_enrollments')
         .update({ last_accessed_at: now })
-        .eq('user_id', userId)
-        .eq('project_id', projectId)
+        .eq('id', existing.id)
       return true
     }
 
-    const { error } = await supabase.from('project_enrollments').upsert(
-      {
-        user_id: userId,
-        project_id: projectId,
-        status: 'in_progress',
-        is_completed: false,
-        last_step_id: firstStepId || null,
-        last_accessed_at: now,
-      },
-      { onConflict: 'user_id,project_id' }
-    )
+    const { error } = await supabase.from('project_enrollments').insert({
+      user_id: userId,
+      project_id: projectId,
+      status: 'in_progress',
+      is_completed: false,
+      last_step_id: firstStepId || null,
+      last_accessed_at: now,
+    })
 
     return !error
   } catch {
@@ -352,21 +229,37 @@ export async function completeProjectStep(
   try {
     const now = new Date().toISOString()
 
-    // 1. Mark step completed (idempotent upsert)
-    const { error: stepErr } = await supabase.from('project_step_progress').upsert(
-      {
-        user_id: userId,
-        project_id: projectId,
-        step_id: stepId,
-        is_completed: true,
-        completed_at: now,
-      },
-      { onConflict: 'user_id,step_id' }
-    )
+    // 1. Mark step completed (resilient check-and-insert/update)
+    const { data: existingStep } = await supabase
+      .from('project_step_progress')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('step_id', stepId)
+      .maybeSingle()
 
-    if (stepErr) {
-      console.error('Error completing project step:', stepErr)
-      return false
+    if (existingStep) {
+      await supabase
+        .from('project_step_progress')
+        .update({
+          is_completed: true,
+          completed_at: now,
+        })
+        .eq('id', existingStep.id)
+    } else {
+      const { error: stepErr } = await supabase
+        .from('project_step_progress')
+        .insert({
+          user_id: userId,
+          project_id: projectId,
+          step_id: stepId,
+          is_completed: true,
+          completed_at: now,
+        })
+
+      if (stepErr) {
+        console.error('Error completing project step:', stepErr)
+        return false
+      }
     }
 
     // 2. Check total steps vs completed steps to automatically complete project if done
@@ -444,6 +337,7 @@ export async function completeProject(
           `You completed "${title}" and earned 150 XP!`,
           '🏆'
         )
+        await syncUserBadgesAndAchievements(userId)
       }
     }
 
@@ -472,7 +366,7 @@ export async function fetchShowcases(projectId?: string): Promise<ProjectShowcas
     const { data, error } = await query
 
     if (error || !data || data.length === 0) {
-      return FALLBACK_SHOWCASES
+      return []
     }
 
     return data.map((item) => ({
@@ -490,7 +384,7 @@ export async function fetchShowcases(projectId?: string): Promise<ProjectShowcas
       project_title: item.project?.title || 'Coding Project',
     }))
   } catch {
-    return FALLBACK_SHOWCASES
+    return []
   }
 }
 
@@ -520,10 +414,36 @@ export async function submitProjectShowcase(
 ): Promise<ProjectShowcase | null> {
   try {
     const now = new Date().toISOString()
-    const { data, error } = await supabase
+    const { data: existingShowcase } = await supabase
       .from('project_showcases')
-      .upsert(
-        {
+      .select('id')
+      .eq('user_id', userId)
+      .eq('project_id', projectId)
+      .maybeSingle()
+
+    let showcaseRecord: ProjectShowcase | null = null
+
+    if (existingShowcase) {
+      const { data, error } = await supabase
+        .from('project_showcases')
+        .update({
+          title,
+          description,
+          preview_url: previewUrl || null,
+          live_url: liveUrl || null,
+          is_published: true,
+          updated_at: now,
+        })
+        .eq('id', existingShowcase.id)
+        .select()
+        .single()
+
+      if (error || !data) return null
+      showcaseRecord = data
+    } else {
+      const { data, error } = await supabase
+        .from('project_showcases')
+        .insert({
           user_id: userId,
           project_id: projectId,
           title,
@@ -532,15 +452,28 @@ export async function submitProjectShowcase(
           live_url: liveUrl || null,
           is_published: true,
           updated_at: now,
-        },
-        { onConflict: 'user_id,project_id' }
-      )
-      .select()
-      .single()
+        })
+        .select()
+        .single()
 
-    if (error) {
-      console.error('Error submitting showcase:', error)
-      return null
+      if (error || !data) return null
+      showcaseRecord = data
+    }
+
+    const data = showcaseRecord
+    if (!data) return null
+
+    // Also link into community_posts so it automatically appears in Community feed
+    try {
+      await supabase.from('community_posts').insert({
+        user_id: userId,
+        content: description,
+        post_type: 'project_showcase',
+        project_build_id: data.id,
+        status: 'published',
+      })
+    } catch {
+      // Fallback
     }
 
     await recordUserActivity(userId, 'showcase_submitted', `Published showcase "${title}" to Community ✨`)
@@ -627,6 +560,41 @@ export async function deleteProject(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.from('projects').delete().eq('id', id)
     return !error
+  } catch (err) {
+    console.error('Error deleting project:', err)
+    return false
+  }
+}
+
+export async function createProjectStep(
+  projectId: string,
+  title: string,
+  description: string,
+  stepOrder: number
+): Promise<ProjectStep | null> {
+  try {
+    const { data, error } = await supabase
+      .from('project_steps')
+      .insert({
+        project_id: projectId,
+        title,
+        description,
+        step_order: stepOrder,
+      })
+      .select()
+      .single()
+
+    if (error || !data) return null
+    return data as ProjectStep
+  } catch {
+    return null
+  }
+}
+
+export async function deleteProjectStep(stepId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('project_steps').delete().eq('id', stepId)
+    return !error
   } catch {
     return false
   }
@@ -634,7 +602,7 @@ export async function deleteProject(id: string): Promise<boolean> {
 
 export function useProjects(userId?: string, categoryFilter?: string, includeUnpublished = false) {
   const [projects, setProjects] = useState<ProjectProgressSummary[]>([])
-  const [showcases, setShowcases] = useState<ProjectShowcase[]>(FALLBACK_SHOWCASES)
+  const [showcases, setShowcases] = useState<ProjectShowcase[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadData = useCallback(async () => {

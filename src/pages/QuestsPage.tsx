@@ -2,65 +2,56 @@ import React, { useState } from 'react'
 import { GamifiedCard } from '../components/ui/GamifiedCard'
 import { GamifiedButton } from '../components/ui/GamifiedButton'
 import { useAuth } from '../context/AuthContext'
-import { useLearningProgress } from '../lib/learning'
-import { useGamification } from '../lib/gamification'
+import { useLearningProgress, useLanguages } from '../lib/learning'
 import { useChallenges, type Challenge } from '../lib/challenges'
-import { recordUserActivity, createUserNotification } from '../lib/achievements'
+import { LessonModal } from '../components/learning/LessonModal'
+import { CodeExerciseEditor } from '../components/learning/CodeExerciseEditor'
 import {
   CheckCircle2,
   Terminal,
   Code2,
   Sparkles,
   HelpCircle,
-  RotateCcw,
-  Play,
   Lightbulb,
+  Compass,
+  Lock,
+  X,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 export const QuestsPage: React.FC = () => {
   const { user } = useAuth()
-  const { courses, completeLesson } = useLearningProgress(user?.id)
-  const { awardXp } = useGamification(user?.id)
-  const [selectedFilter, setSelectedFilter] = useState<'All' | 'JavaScript' | 'Python' | 'React' | 'Backend'>('All')
-  const { challenges, submitAttempt } = useChallenges(user?.id, selectedFilter)
+  const { languages, loading: languagesLoading } = useLanguages()
+  const [selectedFilter, setSelectedFilter] = useState<string>('All')
+  const { courses, learningPaths, refreshProgress, completeLesson, loading: coursesLoading } = useLearningProgress(
+    user?.id,
+    selectedFilter === 'All' ? undefined : selectedFilter
+  )
+  const { challenges, submitAttempt, loading: challengesLoading } = useChallenges(user?.id, selectedFilter)
   const [openHintId, setOpenHintId] = useState<string | null>(null)
   const [openSolutionId, setOpenSolutionId] = useState<string | null>(null)
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
+  const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
+  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null)
+
+  const isLoading = languagesLoading || coursesLoading || challengesLoading
+
+  const filterOptions = ['All', ...languages.map((l) => l.name)]
 
   const filteredCourses = selectedFilter === 'All'
     ? courses
-    : courses.filter((c) => c.course.track === selectedFilter)
-
-  const handleCompleteQuest = async (courseId: string, lessonId?: string, courseTitle?: string) => {
-    if (!lessonId || !user?.id) return
-    await completeLesson(courseId, lessonId)
-    await awardXp(50, 'lesson_completed', lessonId)
-    await recordUserActivity(user.id, 'lesson_completed', `Completed quest in ${courseTitle || 'Course'}`)
-    confetti({
-      particleCount: 70,
-      spread: 60,
-      origin: { y: 0.7 },
-    })
-  }
+    : courses.filter((c) => c.course.track.toLowerCase() === selectedFilter.toLowerCase())
 
   const handleSubmitChallengeAttempt = async (challenge: Challenge) => {
     if (!user?.id) return
     await submitAttempt(challenge.id, true, 100)
-    const xpResult = await awardXp(75, 'challenge_completed', challenge.id)
-
-    await recordUserActivity(user.id, 'challenge_completed', `Solved challenge "${challenge.title}" ⭐`)
-
-    if (xpResult.awarded) {
-      await createUserNotification(
-        user.id,
-        'Challenge Conquered! ⭐',
-        `You solved "${challenge.title}" and earned 75 XP!`,
-        '🏆'
-      )
-    }
-
     if (challenge.course_id && challenge.lesson_id) {
       await completeLesson(challenge.course_id, challenge.lesson_id)
+    } else {
+      await refreshProgress()
     }
 
     confetti({
@@ -70,90 +61,268 @@ export const QuestsPage: React.FC = () => {
     })
   }
 
+  if (isLoading) {
+    return (
+      <div className="w-full max-w-6xl mx-auto flex flex-col gap-8 pb-12 animate-pulse text-left">
+        <div className="h-10 w-72 bg-slate-200/70 rounded-2xl" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="h-64 bg-slate-200/70 rounded-3xl" />
+          <div className="h-64 bg-slate-200/70 rounded-3xl" />
+          <div className="h-64 bg-slate-200/70 rounded-3xl" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full max-w-6xl mx-auto flex flex-col gap-8 pb-12 text-left">
-      {/* Filter Tabs */}
+      {/* Active Lesson Modal */}
+      {activeLessonId && (
+        <LessonModal
+          lessonId={activeLessonId}
+          userId={user?.id}
+          onClose={() => setActiveLessonId(null)}
+          onLessonCompleted={refreshProgress}
+          onNavigateLesson={(nextId) => setActiveLessonId(nextId)}
+        />
+      )}
+
+      {/* Active Challenge Coding Exercise Modal */}
+      {selectedChallenge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs text-left animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Code2 className="w-5 h-5 text-purple-600" />
+                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                  Coding Exercise Studio
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedChallenge(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <CodeExerciseEditor
+                challengeId={selectedChallenge.id}
+                title={selectedChallenge.title}
+                description={selectedChallenge.description}
+                instructions={selectedChallenge.instructions}
+                starterCode={selectedChallenge.starter_code}
+                language={selectedChallenge.language || selectedChallenge.category}
+                sampleInput={selectedChallenge.sample_input}
+                hints={selectedChallenge.hints}
+                solutionExplanation={selectedChallenge.solution_explanation}
+                isCompleted={Boolean(challenges.find((c) => c.challenge.id === selectedChallenge.id)?.isCompleted)}
+                onSubmitAttempt={() => handleSubmitChallengeAttempt(selectedChallenge)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Language Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {(['All', 'JavaScript', 'Python', 'React', 'Backend'] as const).map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            onClick={() => setSelectedFilter(filter)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              selectedFilter === filter
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/70'
-            }`}
-          >
-            {filter}
-          </button>
-        ))}
+        {filterOptions.map((filter) => {
+          const langObj = languages.find((l) => l.name === filter)
+          return (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => setSelectedFilter(filter)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedFilter === filter
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/70'
+              }`}
+            >
+              {langObj?.icon && <span>{langObj.icon}</span>}
+              <span>{filter}</span>
+            </button>
+          )
+        })}
       </div>
+
+      {/* CodeDex Islands / Learning Paths Overview */}
+      {learningPaths.length > 0 && selectedFilter === 'All' && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Compass className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-lg font-black text-slate-900 font-pixel uppercase">
+              CodeDex Islands & Realms
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {learningPaths.map((path) => (
+              <div
+                key={path.id}
+                className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between gap-4"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shrink-0">
+                    {path.icon || '🏝️'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-pixel text-emerald-600 uppercase font-bold">
+                        {path.island_name || 'ARCHIPELAGO ISLAND'}
+                      </span>
+                      <span className="text-[11px] font-pixel font-bold text-slate-500">
+                        {path.completedCourses}/{path.totalCourses} Courses ({path.progressPercent}%)
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-900 mt-0.5">{path.title}</h4>
+                    <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{path.description}</p>
+                  </div>
+                </div>
+
+                {/* Island Progress Bar */}
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
+                    style={{ width: `${path.progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Course & Quests Track Section */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <Terminal className="w-5 h-5 text-emerald-600" />
           <h3 className="text-lg font-black text-slate-900 font-pixel uppercase">
-            Learning Quests & Tracks
+            Learning Quests & Courses
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCourses.map(({ course, completedLessons, totalLessons, progressPercent, nextLesson }) => {
-            const isDone = progressPercent === 100
-            return (
-              <GamifiedCard
-                key={course.id}
-                className={`flex flex-col justify-between p-6 border-2 transition-all ${
-                  isDone ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-100 hover:border-slate-300'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-pixel text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-bold">
-                      {course.track}
-                    </span>
-                    <span className="text-xs font-pixel text-slate-500 font-bold">
-                      {completedLessons}/{totalLessons} ({progressPercent}%)
-                    </span>
+        {filteredCourses.length === 0 ? (
+          <div className="p-10 text-center bg-white rounded-3xl border border-slate-100 text-slate-400 font-pixel text-xs">
+            NO COURSES AVAILABLE FOR THIS REALM FILTER
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredCourses.map(({ course, chapters, completedLessons, totalLessons, progressPercent, isCompleted, nextLesson, isUnlocked, prerequisiteCourseTitle }) => {
+              const isExpanded = expandedCourseId === course.id
+              return (
+                <GamifiedCard
+                  key={course.id}
+                  className={`flex flex-col justify-between p-6 border-2 transition-all ${
+                    isCompleted
+                      ? 'border-emerald-200 bg-emerald-50/20'
+                      : !isUnlocked
+                      ? 'border-slate-200 bg-slate-50/70 opacity-75'
+                      : 'border-slate-100 hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] font-pixel text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                        {course.track}
+                      </span>
+                      <span className="text-xs font-pixel text-slate-500 font-bold">
+                        {completedLessons}/{totalLessons} ({progressPercent}%)
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Difficulty: {course.difficulty}
+                    </div>
+                    <h4 className="font-bold text-base text-slate-900 mb-2 flex items-center gap-2">
+                      <span>{course.title}</span>
+                      {!isUnlocked && <Lock className="w-4 h-4 text-slate-400" />}
+                    </h4>
+                    <p className="text-xs text-slate-500 mb-4 leading-relaxed">{course.description}</p>
+
+                    {/* Progress Indicator */}
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-4">
+                      <div
+                        className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+
+                    {/* Chapters Syllabus Toggle */}
+                    {chapters && chapters.length > 0 && isUnlocked && (
+                      <div className="mb-4">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCourseId(isExpanded ? null : course.id)}
+                          className="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          <span>{isExpanded ? 'Hide Chapters' : `View Syllabus (${chapters.length} Chapters)`}</span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-2.5 max-h-48 overflow-y-auto">
+                            {chapters.map((ch) => (
+                              <div key={ch.id} className="flex flex-col gap-1 text-xs">
+                                <div className="flex items-center justify-between font-bold text-slate-700">
+                                  <span className="truncate pr-2">{ch.title}</span>
+                                  <span className="text-[10px] font-pixel text-slate-500 shrink-0">
+                                    {ch.completedLessons}/{ch.totalLessons}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col gap-1 pl-2">
+                                  {ch.lessons.map((l) => (
+                                    <button
+                                      key={l.id}
+                                      type="button"
+                                      onClick={() => setActiveLessonId(l.id)}
+                                      className="text-left text-[11px] text-slate-600 hover:text-emerald-700 flex items-center gap-1.5 cursor-pointer py-0.5 transition-colors"
+                                    >
+                                      {l.isCompleted ? (
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                      ) : (
+                                        <BookOpen className="w-3 h-3 text-slate-400 shrink-0" />
+                                      )}
+                                      <span className="truncate">{l.title}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Difficulty: {course.difficulty}
-                  </div>
-                  <h4 className="font-bold text-base text-slate-900 mb-2">{course.title}</h4>
-                  <p className="text-xs text-slate-500 mb-4 leading-relaxed">{course.description}</p>
-
-                  {/* Progress Indicator */}
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                </div>
-
-                {isDone ? (
-                  <div className="w-full py-2.5 bg-emerald-100 text-emerald-800 rounded-xl font-pixel text-[10px] font-bold flex items-center justify-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>COURSE COMPLETED</span>
-                  </div>
-                ) : (
-                  <GamifiedButton
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleCompleteQuest(course.id, nextLesson?.id, course.title)}
-                    className="w-full flex items-center justify-center gap-2"
-                  >
-                    <Terminal className="w-3.5 h-3.5" />
-                    <span>{nextLesson ? `Start: ${nextLesson.title}` : 'Start Quest'} ⚔️</span>
-                  </GamifiedButton>
-                )}
-              </GamifiedCard>
-            )
-          })}
-        </div>
+                  {isCompleted ? (
+                    <div className="w-full py-2.5 bg-emerald-100 text-emerald-800 rounded-xl font-pixel text-[10px] font-bold flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>COURSE COMPLETED</span>
+                    </div>
+                  ) : !isUnlocked ? (
+                    <div className="w-full py-2.5 bg-slate-200/80 text-slate-600 rounded-xl font-pixel text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-not-allowed">
+                      <Lock className="w-3.5 h-3.5 text-slate-500" />
+                      <span>LOCKED: COMPLETE {prerequisiteCourseTitle ? prerequisiteCourseTitle.toUpperCase() : 'PREREQUISITE'}</span>
+                    </div>
+                  ) : (
+                    <GamifiedButton
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => nextLesson?.id && setActiveLessonId(nextLesson.id)}
+                      className="w-full flex items-center justify-center gap-2"
+                    >
+                      <Terminal className="w-3.5 h-3.5" />
+                      <span>{nextLesson ? `Learn: ${nextLesson.title}` : 'Start Course'} ⚔️</span>
+                    </GamifiedButton>
+                  )}
+                </GamifiedCard>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Real Supabase Coding Challenges Section */}
@@ -170,109 +339,103 @@ export const QuestsPage: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {challenges.map(({ challenge, isCompleted, attemptsCount }) => (
-            <GamifiedCard
-              key={challenge.id}
-              accentColor="purple"
-              className={`flex flex-col justify-between p-6 border-2 transition-all ${
-                isCompleted ? 'border-purple-200 bg-purple-50/20' : 'border-slate-100'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
+        {challenges.length === 0 ? (
+          <div className="p-8 text-center bg-white rounded-3xl border border-slate-100 text-slate-400 font-pixel text-xs">
+            NO CHALLENGES FOUND FOR THIS FILTER
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {challenges.map(({ challenge, isCompleted, attemptsCount }) => (
+              <GamifiedCard
+                key={challenge.id}
+                accentColor="purple"
+                className={`flex flex-col justify-between p-6 border-2 transition-all ${
+                  isCompleted ? 'border-purple-200 bg-purple-50/20' : 'border-slate-100'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-pixel text-purple-700 bg-purple-100 px-2 py-0.5 rounded font-bold uppercase">
-                      {challenge.category}
+                      {challenge.language || challenge.category}
                     </span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    <span className="text-xs font-pixel text-slate-500 font-bold">
                       {challenge.difficulty}
                     </span>
                   </div>
-                  <span className="text-xs font-pixel text-amber-500 font-bold flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" />
-                    <span>+75 XP Reward</span>
-                  </span>
+
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Attempts: {attemptsCount}
+                  </div>
+                  <h4 className="font-bold text-base text-slate-900 mb-2">{challenge.title}</h4>
+                  <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                    {challenge.instructions || challenge.description}
+                  </p>
+
+                  {/* Hint Section */}
+                  {challenge.hints && challenge.hints.length > 0 && (
+                    <div className="mb-4">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenHintId(openHintId === challenge.id ? null : challenge.id)
+                        }
+                        className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>{openHintId === challenge.id ? 'Hide Hint' : 'Need a Hint?'}</span>
+                      </button>
+                      {openHintId === challenge.id && (
+                        <div className="mt-2 p-3 bg-purple-50 rounded-xl text-xs text-purple-900 font-mono border border-purple-100 animate-in fade-in">
+                          {challenge.hints[0]}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Solution Explanation if Completed */}
+                  {isCompleted && challenge.solution_explanation && (
+                    <div className="mb-4">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenSolutionId(openSolutionId === challenge.id ? null : challenge.id)
+                        }
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Lightbulb className="w-3.5 h-3.5" />
+                        <span>{openSolutionId === challenge.id ? 'Hide Solution Explanation' : 'View Solution Explanation'}</span>
+                      </button>
+                      {openSolutionId === challenge.id && (
+                        <div className="mt-2 p-3 bg-emerald-50 rounded-xl text-xs text-emerald-950 font-medium border border-emerald-100 animate-in fade-in">
+                          {challenge.solution_explanation}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <h4 className="font-bold text-base text-slate-900 mb-2">{challenge.title}</h4>
-                <p className="text-xs text-slate-600 mb-4 leading-relaxed">{challenge.description}</p>
-
-                {/* Hints Section */}
-                {challenge.hints && challenge.hints.length > 0 && (
-                  <div className="mb-3">
-                    <button
-                      type="button"
-                      onClick={() => setOpenHintId(openHintId === challenge.id ? null : challenge.id)}
-                      className="text-[11px] text-purple-600 font-bold flex items-center gap-1 hover:underline cursor-pointer"
-                    >
-                      <HelpCircle className="w-3.5 h-3.5" />
-                      <span>{openHintId === challenge.id ? 'Hide Hint' : 'View Hint'}</span>
-                    </button>
-                    {openHintId === challenge.id && (
-                      <div className="mt-2 p-3 bg-purple-50 rounded-xl text-[11px] text-purple-900 font-mono border border-purple-200">
-                        {challenge.hints[0]}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Solution / Explanation Section (Available upon completion) */}
-                {isCompleted && challenge.solution_explanation && (
-                  <div className="mb-4">
-                    <button
-                      type="button"
-                      onClick={() => setOpenSolutionId(openSolutionId === challenge.id ? null : challenge.id)}
-                      className="text-[11px] text-emerald-700 font-bold flex items-center gap-1 hover:underline cursor-pointer"
-                    >
-                      <Lightbulb className="w-3.5 h-3.5" />
-                      <span>{openSolutionId === challenge.id ? 'Hide Solution Breakdown' : 'View Solution Breakdown'}</span>
-                    </button>
-                    {openSolutionId === challenge.id && (
-                      <div className="mt-2 p-3 bg-emerald-50 rounded-xl text-[11px] text-emerald-900 font-medium border border-emerald-200 leading-relaxed">
-                        {challenge.solution_explanation}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                {isCompleted ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-emerald-600 font-pixel flex items-center gap-1">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>PASSED (100%)</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        ({attemptsCount} {attemptsCount === 1 ? 'attempt' : 'attempts'})
-                      </span>
+                <div className="flex items-center gap-3">
+                  {isCompleted ? (
+                    <div className="flex-1 py-2.5 bg-purple-100 text-purple-800 rounded-xl font-pixel text-[10px] font-bold flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-purple-600" />
+                      <span>SOLVED</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleSubmitChallengeAttempt(challenge)}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-pixel text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  ) : (
+                    <GamifiedButton
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setSelectedChallenge(challenge)}
+                      className="w-full flex items-center justify-center gap-2"
                     >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Retry</span>
-                    </button>
-                  </>
-                ) : (
-                  <GamifiedButton
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleSubmitChallengeAttempt(challenge)}
-                    className="w-full flex items-center justify-center gap-1.5"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    <span>Submit Solution (+75 XP) ⚔️</span>
-                  </GamifiedButton>
-                )}
-              </div>
-            </GamifiedCard>
-          ))}
-        </div>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Open Code Editor (+75 XP)</span>
+                    </GamifiedButton>
+                  )}
+                </div>
+              </GamifiedCard>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

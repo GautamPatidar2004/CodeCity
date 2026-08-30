@@ -31,7 +31,7 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({ activeTab, onTabChange }) 
               ? 'bg-purple-100 text-purple-700 border-purple-300'
               : 'bg-emerald-100 text-emerald-700 border-emerald-300'
           }`}>
-            {role === 'admin' ? 'ADMIN' : 'LEARNER'}
+            {role === 'admin' ? 'ADMIN' : 'STUDENT'}
           </span>
         </div>
       </div>
@@ -121,24 +121,30 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({ activeTab, onTabChange }) 
               </div>
 
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    onClick={() => markRead(n.id)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                      n.isRead ? 'bg-slate-50 border-slate-100 opacity-70' : 'bg-emerald-50/60 border-emerald-200'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <span className="text-base shrink-0">{n.icon}</span>
-                      <div className="flex-1">
-                        <div className="font-bold text-xs text-slate-900 leading-tight">{n.title}</div>
-                        <div className="text-[11px] text-slate-600 mt-0.5 leading-snug">{n.message}</div>
-                        <div className="text-[9px] text-slate-400 mt-1">{n.createdAt}</div>
+                {notifications.length === 0 ? (
+                  <div className="py-6 text-center text-slate-400 text-xs font-medium">
+                    No notifications yet
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => markRead(n.id)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                        n.isRead ? 'bg-slate-50 border-slate-100 opacity-70' : 'bg-emerald-50/60 border-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-base shrink-0">{n.icon}</span>
+                        <div className="flex-1">
+                          <div className="font-bold text-xs text-slate-900 leading-tight">{n.title}</div>
+                          <div className="text-[11px] text-slate-600 mt-0.5 leading-snug">{n.message}</div>
+                          <div className="text-[9px] text-slate-400 mt-1">{n.createdAt}</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}

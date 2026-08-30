@@ -40,80 +40,123 @@ export interface NotificationItem {
   createdAt: string
 }
 
-const DEFAULT_BADGES: BadgeItem[] = [
-  { id: 'b1', slug: 'first-quest', title: 'Quest Complete', description: 'Completed your first quest', icon: '⚔️', category: 'milestone', isUnlocked: true },
-  { id: 'b2', slug: 'bug-hunter', title: 'Bug Hunter', description: 'Squashed syntax errors', icon: '👾', category: 'skill', isUnlocked: true },
-  { id: 'b3', slug: 'streak-fire', title: 'Streak Keeper', description: 'Maintained a 3-day streak', icon: '🔥', category: 'streak', isUnlocked: true },
-  { id: 'b4', slug: 'js-explorer', title: 'JS Explorer', description: 'Mastered JavaScript primitives', icon: '⚡', category: 'language', isUnlocked: false },
-]
+function formatRelativeOrLocaleTime(dateStr: string): string {
+  try {
+    const d = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / (1000 * 60))
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
 
-const DEFAULT_ACHIEVEMENTS: AchievementItem[] = [
-  { id: 'a1', slug: 'novice-coder', title: 'Novice Coder', description: 'Reach Level 2 in your adventure', icon: '🏆', targetCount: 1, progressCount: 1, rewardXp: 50, isUnlocked: true },
-  { id: 'a2', slug: 'daily-dedication', title: 'Daily Dedication', description: 'Complete your daily learning goal', icon: '🎯', targetCount: 1, progressCount: 1, rewardXp: 50, isUnlocked: true },
-  { id: 'a3', slug: 'trailblazer', title: 'Trailblazer', description: 'Complete 3 learning lessons', icon: '🚀', targetCount: 3, progressCount: 1, rewardXp: 75, isUnlocked: false },
-]
-
-const DEFAULT_ACTIVITIES: ActivityItem[] = [
-  { id: 'act1', actionType: 'lesson_completed', title: 'Completed "The JavaScript Awakening: 01. Setting Up Variables"', createdAt: 'Just now' },
-  { id: 'act2', actionType: 'streak_maintained', title: 'Maintained 3-day coding streak 🔥', createdAt: 'Today' },
-  { id: 'act3', actionType: 'badge_unlocked', title: 'Unlocked "Quest Complete" badge ⚔️', createdAt: 'Yesterday' },
-]
-
-const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
-  { id: 'n1', title: 'Daily Goal Complete! ⭐', message: 'You earned 50 XP today and kept your streak alive!', icon: '🎯', isRead: false, createdAt: '10m ago' },
-  { id: 'n2', title: 'Welcome Adventurer', message: 'Ready to continue your coding quest in CodeQuest?', icon: '⚔️', isRead: true, createdAt: '1h ago' },
-]
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  } catch {
+    return dateStr
+  }
+}
 
 export async function fetchUserBadges(userId?: string): Promise<BadgeItem[]> {
-  if (!userId) return DEFAULT_BADGES
   try {
-    const { data: allBadges } = await supabase.from('badges').select('*').order('created_at', { ascending: true })
-    if (!allBadges || allBadges.length === 0) return DEFAULT_BADGES
+    const { data: allBadges, error: badgesErr } = await supabase
+      .from('badges')
+      .select('*')
+      .order('created_at', { ascending: true })
 
-    const { data: userBadges } = await supabase.from('user_badges').select('badge_id, unlocked_at').eq('user_id', userId)
-    const unlockedMap = new Map((userBadges || []).map((ub) => [ub.badge_id, ub.unlocked_at]))
+    if (badgesErr || !allBadges || allBadges.length === 0) {
+      return []
+    }
+
+    const unlockedMap = new Map<string, string>()
+
+    if (userId) {
+      const { data: userBadges } = await supabase
+        .from('user_badges')
+        .select('badge_id, unlocked_at')
+        .eq('user_id', userId)
+
+      if (userBadges) {
+        userBadges.forEach((ub) => {
+          unlockedMap.set(ub.badge_id, ub.unlocked_at)
+        })
+      }
+    }
 
     return allBadges.map((b) => ({
       id: b.id,
       slug: b.slug,
       title: b.title,
-      description: b.description,
-      icon: b.icon,
-      category: b.category,
+      description: b.description || '',
+      icon: b.icon || '🏅',
+      category: b.category || 'general',
       isUnlocked: unlockedMap.has(b.id),
       unlockedAt: unlockedMap.get(b.id),
     }))
-  } catch {
-    return DEFAULT_BADGES
+  } catch (err) {
+    console.error('Error fetching badges:', err)
+    return []
   }
 }
 
 export async function fetchUserAchievements(userId?: string): Promise<AchievementItem[]> {
-  if (!userId) return DEFAULT_ACHIEVEMENTS
   try {
-    const { data: allAch } = await supabase.from('achievements').select('*').order('created_at', { ascending: true })
-    if (!allAch || allAch.length === 0) return DEFAULT_ACHIEVEMENTS
+    const [achRes, profileRes, progressRes] = await Promise.all([
+      supabase.from('achievements').select('*').order('created_at', { ascending: true }),
+      userId ? supabase.from('profiles').select('level, streak, daily_goal_xp, daily_xp_earned').eq('id', userId).maybeSingle() : Promise.resolve({ data: null }),
+      userId ? supabase.from('lesson_progress').select('lesson_id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_completed', true) : Promise.resolve({ count: 0 }),
+    ])
 
-    const { data: userAch } = await supabase.from('user_achievements').select('achievement_id, progress_count, is_unlocked').eq('user_id', userId)
-    const userMap = new Map((userAch || []).map((ua) => [ua.achievement_id, ua]))
+    const allAch = achRes.data || []
+    if (allAch.length === 0) return []
+
+    const profile = profileRes.data
+    const completedLessonsCount = progressRes.count || 0
 
     return allAch.map((a) => {
-      const userProgress = userMap.get(a.id)
+      let progressCount = 0
+      let isUnlocked = false
+
+      if (a.slug === 'novice-coder') {
+        isUnlocked = (profile?.level ?? 1) >= 2
+        progressCount = isUnlocked ? 1 : 0
+      } else if (a.slug === 'daily-dedication') {
+        isUnlocked = (profile?.daily_goal_xp ?? 50) > 0 && (profile?.daily_xp_earned ?? 0) >= (profile?.daily_goal_xp ?? 50)
+        progressCount = isUnlocked ? 1 : 0
+      } else if (a.slug === 'trailblazer') {
+        const target = a.target_count || 3
+        progressCount = Math.min(target, completedLessonsCount)
+        isUnlocked = completedLessonsCount >= target
+      } else {
+        const target = a.target_count || 1
+        progressCount = Math.min(target, completedLessonsCount)
+        isUnlocked = completedLessonsCount >= target
+      }
+
       return {
         id: a.id,
         slug: a.slug,
         title: a.title,
-        description: a.description,
-        icon: a.icon,
-        targetCount: a.target_count,
-        progressCount: userProgress?.progress_count ?? 1,
-        rewardXp: a.reward_xp,
-        isUnlocked: userProgress?.is_unlocked ?? true,
+        description: a.description || '',
+        icon: a.icon || '🏆',
+        targetCount: a.target_count || 1,
+        progressCount,
+        rewardXp: a.reward_xp || 50,
+        isUnlocked,
       }
     })
-  } catch {
-    return DEFAULT_ACHIEVEMENTS
+  } catch (err) {
+    console.error('Error fetching achievements:', err)
+    return []
   }
+}
+
+export async function syncUserBadgesAndAchievements(userId: string): Promise<void> {
+  if (!userId) return
+  // Dynamically computed on read, no redundant writes needed
 }
 
 export async function recordUserActivity(userId: string, actionType: string, title: string): Promise<void> {
@@ -150,60 +193,77 @@ export async function markNotificationAsRead(notificationId: string): Promise<vo
 }
 
 export function useAchievementsAndNotifications(userId?: string) {
-  const [badges, setBadges] = useState<BadgeItem[]>(DEFAULT_BADGES)
-  const [achievements, setAchievements] = useState<AchievementItem[]>(DEFAULT_ACHIEVEMENTS)
-  const [activities, setActivities] = useState<ActivityItem[]>(DEFAULT_ACTIVITIES)
-  const [notifications, setNotifications] = useState<NotificationItem[]>(DEFAULT_NOTIFICATIONS)
+  const [badges, setBadges] = useState<BadgeItem[]>([])
+  const [achievements, setAchievements] = useState<AchievementItem[]>([])
+  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [loading, setLoading] = useState(true)
 
   const loadData = useCallback(async () => {
-    if (!userId) return
+    if (!userId) {
+      setBadges([])
+      setAchievements([])
+      setActivities([])
+      setNotifications([])
+      setLoading(false)
+      return
+    }
 
+    setLoading(true)
     try {
-      const loadedBadges = await fetchUserBadges(userId)
-      setBadges(loadedBadges)
+      await syncUserBadgesAndAchievements(userId)
 
-      const loadedAchievements = await fetchUserAchievements(userId)
+      const [loadedBadges, loadedAchievements, notifRes, actRes] = await Promise.all([
+        fetchUserBadges(userId),
+        fetchUserAchievements(userId),
+        supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('activity_history')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10),
+      ])
+
+      setBadges(loadedBadges)
       setAchievements(loadedAchievements)
 
-      const { data: notifData } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (notifData && notifData.length > 0) {
+      if (notifRes.data) {
         setNotifications(
-          notifData.map((n) => ({
+          notifRes.data.map((n) => ({
             id: n.id,
             title: n.title,
             message: n.message,
             icon: n.icon || '🔔',
             isRead: n.is_read,
-            createdAt: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: formatRelativeOrLocaleTime(n.created_at),
           }))
         )
+      } else {
+        setNotifications([])
       }
 
-      const { data: actData } = await supabase
-        .from('activity_history')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (actData && actData.length > 0) {
+      if (actRes.data) {
         setActivities(
-          actData.map((a) => ({
+          actRes.data.map((a) => ({
             id: a.id,
             actionType: a.action_type,
             title: a.title,
-            createdAt: new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: formatRelativeOrLocaleTime(a.created_at),
           }))
         )
+      } else {
+        setActivities([])
       }
-    } catch {
-      // Retain defaults
+    } catch (err) {
+      console.error('Error loading achievements and notifications:', err)
+    } finally {
+      setLoading(false)
     }
   }, [userId])
 
@@ -211,6 +271,8 @@ export function useAchievementsAndNotifications(userId?: string) {
     let mounted = true
     if (userId && mounted) {
       loadData()
+    } else if (!userId) {
+      setLoading(false)
     }
     return () => {
       mounted = false
@@ -236,6 +298,7 @@ export function useAchievementsAndNotifications(userId?: string) {
     activities,
     notifications,
     unreadCount,
+    loading,
     markRead,
     logAction,
     refreshAll: loadData,

@@ -10,6 +10,11 @@ export interface Challenge {
   category: string
   course_id?: string
   lesson_id?: string
+  starter_code?: string
+  language?: string
+  instructions?: string
+  sample_input?: string
+  order_index?: number
   hints?: string[]
   solution_explanation?: string
   is_published: boolean
@@ -30,57 +35,6 @@ export interface ChallengeWithProgress {
   isCompleted: boolean
   attemptsCount: number
 }
-
-const FALLBACK_CHALLENGES: Challenge[] = [
-  {
-    id: 'f0000000-0000-0000-0000-000000000001',
-    title: 'Variable Swap Matrix',
-    slug: 'variable-swap-matrix',
-    description: 'Given two variables a and b, swap their values without creating a permanent global state.',
-    difficulty: 'Beginner',
-    category: 'JavaScript',
-    hints: ['Use array destructuring [a, b] = [b, a]', 'Or use a temporary holding variable temp'],
-    solution_explanation: 'Array destructuring allows clean swapping in a single atomic statement: [a, b] = [b, a].',
-    is_published: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000002',
-    title: 'Array Filter Pipeline',
-    slug: 'array-filter-pipeline',
-    description: 'Transform an array of numbers to keep only even positive numbers greater than 10.',
-    difficulty: 'Intermediate',
-    category: 'JavaScript',
-    hints: ['Combine array.filter() with modulo check num % 2 === 0 and num > 10'],
-    solution_explanation: 'Use arr.filter(n => n > 10 && n % 2 === 0) for declarative collection filtering.',
-    is_published: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000003',
-    title: 'Python List Comprehension Quest',
-    slug: 'python-list-comprehension-quest',
-    description: 'Generate squares of odd numbers from 1 to 20 using a one-line Python list comprehension.',
-    difficulty: 'Beginner',
-    category: 'Python',
-    hints: ['Syntax: [expr for item in iterable if condition]'],
-    solution_explanation: '[x**2 for x in range(1, 21) if x % 2 != 0]',
-    is_published: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000004',
-    title: 'Stateful Counter Hook',
-    slug: 'stateful-counter-hook',
-    description: 'Construct a reusable custom hook useCounter with increment, decrement, and reset capabilities.',
-    difficulty: 'Intermediate',
-    category: 'React',
-    hints: ['Use useState(initialValue)', 'Return an object with count and handler functions'],
-    solution_explanation: 'Custom hooks encapsulate stateful logic while keeping component render functions clean.',
-    is_published: true,
-    created_at: new Date().toISOString(),
-  },
-]
 
 export async function fetchChallengesWithProgress(
   userId?: string,
@@ -104,9 +58,11 @@ export async function fetchChallengesWithProgress(
 
     const { data: challengesData, error } = await query
 
-    const baseList: Challenge[] = !error && challengesData && challengesData.length > 0
-      ? (challengesData as Challenge[])
-      : (category && category !== 'All' ? FALLBACK_CHALLENGES.filter((c) => c.category === category) : FALLBACK_CHALLENGES)
+    if (error || !challengesData || challengesData.length === 0) {
+      return []
+    }
+
+    const baseList: Challenge[] = challengesData as Challenge[]
 
     const progressMap = new Map<string, ChallengeProgress>()
     if (userId) {
@@ -137,12 +93,126 @@ export async function fetchChallengesWithProgress(
         attemptsCount: prog?.attempts_count ?? 0,
       }
     })
-  } catch {
-    return FALLBACK_CHALLENGES.map((ch) => ({
-      challenge: ch,
-      isCompleted: false,
-      attemptsCount: 0,
-    }))
+  } catch (err) {
+    console.error('Error fetching challenges with progress:', err)
+    return []
+  }
+}
+
+export async function fetchAdminChallenges(): Promise<Challenge[]> {
+  try {
+    const { data, error } = await supabase
+      .from('challenges')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (error || !data) {
+      return []
+    }
+
+    return data as Challenge[]
+  } catch (err) {
+    console.error('Error fetching admin challenges:', err)
+    return []
+  }
+}
+
+export async function createAdminChallenge(challengeData: Partial<Challenge>): Promise<Challenge | null> {
+  try {
+    const slug = challengeData.slug || challengeData.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `challenge-${Date.now()}`
+    
+    // First try full payload
+    const fullPayload: Record<string, any> = {
+      title: challengeData.title,
+      slug,
+      description: challengeData.description || challengeData.instructions || '',
+      difficulty: challengeData.difficulty || 'Beginner',
+      category: challengeData.category || 'JavaScript',
+      course_id: challengeData.course_id || null,
+      lesson_id: challengeData.lesson_id || null,
+      starter_code: challengeData.starter_code || '',
+      language: challengeData.language || 'javascript',
+      instructions: challengeData.instructions || challengeData.description || '',
+      sample_input: challengeData.sample_input || '',
+      hints: challengeData.hints || [],
+      solution_explanation: challengeData.solution_explanation || null,
+      is_published: challengeData.is_published ?? true,
+    }
+
+    const { data, error } = await supabase
+      .from('challenges')
+      .insert(fullPayload)
+      .select()
+      .single()
+
+    if (!error && data) {
+      return data as Challenge
+    }
+
+    // Fallback to base table schema if extra columns are not present
+    const basePayload = {
+      title: challengeData.title,
+      slug,
+      description: challengeData.description || challengeData.instructions || '',
+      difficulty: challengeData.difficulty || 'Beginner',
+      category: challengeData.category || 'JavaScript',
+      course_id: challengeData.course_id || null,
+      lesson_id: challengeData.lesson_id || null,
+      hints: challengeData.hints || [],
+      solution_explanation: challengeData.solution_explanation || null,
+      is_published: challengeData.is_published ?? true,
+    }
+
+    const { data: baseData, error: baseError } = await supabase
+      .from('challenges')
+      .insert(basePayload)
+      .select()
+      .single()
+
+    if (baseError || !baseData) {
+      console.error('Error creating challenge:', baseError || error)
+      return null
+    }
+
+    return baseData as Challenge
+  } catch (err) {
+    console.error('Error creating challenge:', err)
+    return null
+  }
+}
+
+export async function updateAdminChallenge(id: string, updates: Partial<Challenge>): Promise<Challenge | null> {
+  try {
+    const { data, error } = await supabase
+      .from('challenges')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error || !data) {
+      console.error('Error updating challenge:', error)
+      return null
+    }
+
+    return data as Challenge
+  } catch (err) {
+    console.error('Error updating challenge:', err)
+    return null
+  }
+}
+
+export async function deleteAdminChallenge(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('challenges')
+      .delete()
+      .eq('id', id)
+
+    return !error
+  } catch (err) {
+    console.error('Error deleting challenge:', err)
+    return false
   }
 }
 
@@ -155,7 +225,6 @@ export async function recordChallengeSubmission(
   try {
     const now = new Date().toISOString()
 
-    // 1. Fetch current attempt count
     const { data: existingProgress } = await supabase
       .from('challenge_progress')
       .select('attempts_count, best_score, is_completed')
@@ -167,7 +236,6 @@ export async function recordChallengeSubmission(
     const newBestScore = Math.max(existingProgress?.best_score ?? 0, passed ? score : 0)
     const isCompleted = (existingProgress?.is_completed ?? false) || passed
 
-    // 2. Insert attempt record
     await supabase.from('challenge_attempts').insert({
       user_id: userId,
       challenge_id: challengeId,
@@ -178,16 +246,31 @@ export async function recordChallengeSubmission(
       completed_at: now,
     })
 
-    // 3. Upsert overall challenge progress
-    await supabase.from('challenge_progress').upsert({
-      user_id: userId,
-      challenge_id: challengeId,
-      is_completed: isCompleted,
-      best_score: newBestScore,
-      attempts_count: newAttemptsCount,
-      last_attempt_at: now,
-      completed_at: isCompleted ? now : null,
-    }, { onConflict: 'user_id,challenge_id' })
+    if (existingProgress) {
+      await supabase
+        .from('challenge_progress')
+        .update({
+          is_completed: isCompleted,
+          best_score: newBestScore,
+          attempts_count: newAttemptsCount,
+          last_attempt_at: now,
+          completed_at: isCompleted ? now : null,
+        })
+        .eq('user_id', userId)
+        .eq('challenge_id', challengeId)
+    } else {
+      await supabase
+        .from('challenge_progress')
+        .insert({
+          user_id: userId,
+          challenge_id: challengeId,
+          is_completed: isCompleted,
+          best_score: newBestScore,
+          attempts_count: newAttemptsCount,
+          last_attempt_at: now,
+          completed_at: isCompleted ? now : null,
+        })
+    }
   } catch (err) {
     console.error('Error recording challenge submission:', err)
   }

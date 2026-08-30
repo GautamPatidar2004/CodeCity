@@ -7,6 +7,15 @@ import {
   type ProjectProgressSummary,
 } from '../lib/projects'
 import {
+  useCommunityFeed,
+  fetchPostComments,
+  addPostComment,
+  deletePostComment,
+  reportContent,
+  type CommunityPost,
+  type PostComment,
+} from '../lib/community'
+import {
   FolderGit2,
   Layers,
   Search,
@@ -24,15 +33,29 @@ import {
   Share2,
   Trash2,
   LayoutGrid,
+  Send,
+  MessageSquare,
+  Heart,
+  UserPlus,
+  UserCheck,
+  Eye,
+  EyeOff,
+  Flag,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 export const ProjectsPage: React.FC = () => {
-  const { user, role, isAdmin } = useAuth()
+  const { user, profile, role, isAdmin } = useAuth()
   const [viewMode, setViewMode] = useState<'blueprints' | 'showcase'>('blueprints')
   const [selectedFilter, setSelectedFilter] = useState<string>('All')
+  const [communityFilter, setCommunityFilter] = useState<'All' | 'project_showcase' | 'text'>('All')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+
+  // Reporting State
+  const [reportingPostId, setReportingPostId] = useState<string | null>(null)
+  const [reportReason, setReportReason] = useState('')
+  const [reportSuccess, setReportSuccess] = useState(false)
 
   // Showcase Submission Modal State
   const [showcaseProjectId, setShowcaseProjectId] = useState<string | null>(null)
@@ -41,16 +64,36 @@ export const ProjectsPage: React.FC = () => {
   const [showcaseLiveUrl, setShowcaseLiveUrl] = useState('')
   const [showcaseSuccess, setShowcaseSuccess] = useState(false)
 
+  // Quick Community Post State
+  const [newPostContent, setNewPostContent] = useState('')
+
+  // Comments Dialog State
+  const [activeCommentPost, setActiveCommentPost] = useState<CommunityPost | null>(null)
+  const [postComments, setPostComments] = useState<PostComment[]>([])
+  const [newCommentText, setNewCommentText] = useState('')
+  const [loadingComments, setLoadingComments] = useState(false)
+
+  const currentUsername = profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'Adventurer'
+
   const {
     projects,
-    showcases,
-    loading,
+    loading: projectsLoading,
     startProject,
     completeStep,
     completeProject,
     submitShowcase,
-    removeShowcase,
   } = useProjects(user?.id, selectedFilter)
+
+  const {
+    posts,
+    loading: feedLoading,
+    addPost,
+    removePost,
+    moderatePost,
+    toggleLike,
+    toggleFollow,
+    refreshFeed,
+  } = useCommunityFeed(user?.id, communityFilter, isAdmin, currentUsername)
 
   const filteredProjects = projects.filter((item) => {
     if (!searchQuery.trim()) return true
@@ -62,14 +105,14 @@ export const ProjectsPage: React.FC = () => {
     )
   })
 
-  const filteredShowcases = showcases.filter((s) => {
+  const filteredPosts = posts.filter((p) => {
     if (!searchQuery.trim()) return true
     const query = searchQuery.toLowerCase()
     return (
-      s.title.toLowerCase().includes(query) ||
-      s.description.toLowerCase().includes(query) ||
-      (s.author_name && s.author_name.toLowerCase().includes(query)) ||
-      (s.project_title && s.project_title.toLowerCase().includes(query))
+      p.content.toLowerCase().includes(query) ||
+      (p.author_name && p.author_name.toLowerCase().includes(query)) ||
+      (p.project_showcase?.title && p.project_showcase.title.toLowerCase().includes(query)) ||
+      (p.project_showcase?.project_title && p.project_showcase.project_title.toLowerCase().includes(query))
     )
   })
 
@@ -147,6 +190,55 @@ export const ProjectsPage: React.FC = () => {
     }
   }
 
+  const handleCreateQuickPost = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newPostContent.trim()) return
+    await addPost(newPostContent.trim(), 'text')
+    setNewPostContent('')
+  }
+
+  const handleOpenComments = async (post: CommunityPost) => {
+    setActiveCommentPost(post)
+    setLoadingComments(true)
+    const comments = await fetchPostComments(post.id)
+    setPostComments(comments)
+    setLoadingComments(false)
+  }
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!activeCommentPost || !user?.id || !newCommentText.trim()) return
+
+    const added = await addPostComment(user.id, activeCommentPost.id, newCommentText.trim())
+    if (added) {
+      setPostComments((prev) => [...prev, added])
+      setNewCommentText('')
+      await refreshFeed()
+    }
+  }
+
+  const handleDeleteComment = async (commentId: string) => {
+    const ok = await deletePostComment(commentId)
+    if (ok) {
+      setPostComments((prev) => prev.filter((c) => c.id !== commentId))
+      await refreshFeed()
+    }
+  }
+
+  const handleReportPost = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user?.id || !reportingPostId || !reportReason.trim()) return
+    await reportContent(user.id, reportReason.trim(), reportingPostId)
+    setReportSuccess(true)
+    setTimeout(() => {
+      setReportSuccess(false)
+      setReportingPostId(null)
+      setReportReason('')
+    }, 1500)
+  }
+
+  const isLoading = viewMode === 'blueprints' ? projectsLoading : feedLoading
+
   return (
     <div className="w-full max-w-6xl mx-auto flex flex-col gap-8 pb-12 text-left">
       {/* Header & Controls */}
@@ -155,11 +247,11 @@ export const ProjectsPage: React.FC = () => {
           <div className="flex items-center gap-2 mb-1">
             <FolderGit2 className="w-5 h-5 text-emerald-600" />
             <h2 className="text-xl font-black text-slate-900 font-pixel uppercase">
-              Guided Coding Projects & Showcase
+              Guided Coding Projects & Community
             </h2>
           </div>
           <p className="text-xs text-slate-500">
-            Build real-world applications step-by-step, earn XP, and showcase your finished builds.
+            Build real-world applications step-by-step, earn XP, and connect with fellow learners.
           </p>
         </div>
 
@@ -188,7 +280,7 @@ export const ProjectsPage: React.FC = () => {
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Community Showcase</span>
+              <span>Community Feed</span>
             </button>
           </div>
 
@@ -205,8 +297,8 @@ export const ProjectsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Category Filter Tabs (For Blueprints) */}
-      {viewMode === 'blueprints' && (
+      {/* Filter Tabs */}
+      {viewMode === 'blueprints' ? (
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {(['All', 'Web', 'JavaScript', 'Python', 'React', 'Backend'] as const).map((filter) => (
             <button
@@ -223,12 +315,35 @@ export const ProjectsPage: React.FC = () => {
             </button>
           ))}
         </div>
+      ) : (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {(
+            [
+              { key: 'All', label: 'All Updates' },
+              { key: 'project_showcase', label: 'Project Showcases' },
+              { key: 'text', label: 'Discussions' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setCommunityFilter(tab.key)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                communityFilter === tab.key
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/70'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       )}
 
       {/* Main Content Area */}
-      {loading ? (
+      {isLoading ? (
         <div className="py-16 text-center text-slate-400 font-pixel text-xs">
-          LOADING REALM PROJECTS...
+          LOADING REALM CONTENT...
         </div>
       ) : viewMode === 'blueprints' ? (
         filteredProjects.length === 0 ? (
@@ -340,64 +455,343 @@ export const ProjectsPage: React.FC = () => {
           </div>
         )
       ) : (
-        /* Community Showcase View */
-        filteredShowcases.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 font-pixel text-xs bg-white rounded-3xl border border-slate-100 p-8">
-            NO COMMUNITY BUILDS SUBMITTED YET. BE THE FIRST!
+        /* Community Feed View */
+        <div className="flex flex-col gap-6">
+          {/* Quick Post Creator Card */}
+          <form onSubmit={handleCreateQuickPost} className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-800 font-pixel uppercase">
+              <MessageSquare className="w-4 h-4 text-emerald-600" />
+              <span>Share an update or question with the realm</span>
+            </div>
+            <textarea
+              required
+              rows={2}
+              value={newPostContent}
+              onChange={(e) => setNewPostContent(e.target.value)}
+              placeholder="What are you building or learning today?..."
+              className="w-full p-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-pixel text-xs font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Post Update</span>
+              </button>
+            </div>
+          </form>
+
+          {filteredPosts.length === 0 ? (
+            <div className="py-16 text-center text-slate-400 font-pixel text-xs bg-white rounded-3xl border border-slate-100 p-8">
+              NO COMMUNITY POSTS FOUND. BE THE FIRST TO SHARE!
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredPosts.map((post) => (
+                <GamifiedCard key={post.id} className="flex flex-col justify-between p-6 border-2 border-slate-100">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-pixel px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 ${
+                          post.post_type === 'project_showcase'
+                            ? 'text-amber-700 bg-amber-100'
+                            : 'text-purple-700 bg-purple-100'
+                        }`}>
+                          <Sparkles className="w-3 h-3" />
+                          <span>{post.post_type === 'project_showcase' ? 'Project Showcase' : 'Update'}</span>
+                        </span>
+                        {post.status === 'hidden' && (
+                          <span className="text-[9px] font-pixel px-1.5 py-0.2 rounded font-bold uppercase bg-rose-100 text-rose-700">
+                            HIDDEN
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {/* Admin Moderation (Toggle publish/hidden) */}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => moderatePost(post.id, post.status === 'hidden' ? 'published' : 'hidden')}
+                            className="p-1 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors cursor-pointer"
+                            title={post.status === 'hidden' ? 'Unhide Post' : 'Hide Post (Moderation)'}
+                          >
+                            {post.status === 'hidden' ? <Eye className="w-3.5 h-3.5 text-purple-600" /> : <EyeOff className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+
+                        {(isAdmin || role === 'admin' || post.user_id === user?.id) && (
+                          <button
+                            type="button"
+                            onClick={() => removePost(post.id)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Remove Post"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {post.project_showcase && (
+                      <div className="mb-3 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200">
+                        <div className="font-bold text-xs text-slate-900 mb-0.5">
+                          {post.project_showcase.title}
+                        </div>
+                        <div className="text-[10px] text-emerald-700 font-pixel uppercase font-bold">
+                          {post.project_showcase.project_category} • {post.project_showcase.project_title}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-slate-700 leading-relaxed mb-4">
+                      {post.content}
+                    </p>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
+                    {/* Author Attribution & Follow */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-bold text-slate-600 font-mono">
+                          @{post.author_name}
+                        </span>
+                        {post.author_role === 'admin' && (
+                          <span className="px-1.5 py-0.2 rounded text-[8px] font-pixel uppercase font-bold bg-purple-100 text-purple-700">
+                            STAFF
+                          </span>
+                        )}
+                      </div>
+
+                      {user?.id && user.id !== post.user_id && (
+                        <button
+                          type="button"
+                          onClick={() => toggleFollow(post.user_id)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold font-pixel uppercase flex items-center gap-1 transition-colors cursor-pointer ${
+                            post.is_following_author
+                              ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                          }`}
+                        >
+                          {post.is_following_author ? (
+                            <>
+                              <UserCheck className="w-3 h-3 text-emerald-600" />
+                              <span>Following</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-3 h-3 text-emerald-600" />
+                              <span>Follow</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Likes, Comments & Demo Actions */}
+                    <div className="flex items-center justify-between text-xs pt-1">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleLike(post.id)}
+                          className={`flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer ${
+                            post.is_liked_by_user
+                              ? 'text-rose-600 font-bold'
+                              : 'text-slate-400 hover:text-rose-500'
+                          }`}
+                        >
+                          <Heart className={`w-4 h-4 ${post.is_liked_by_user ? 'fill-rose-500 text-rose-500' : ''}`} />
+                          <span className="font-mono text-xs">{post.likes_count}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenComments(post)}
+                          className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          <span className="font-mono text-xs">{post.comments_count}</span>
+                        </button>
+
+                        {user?.id && user.id !== post.user_id && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReportingPostId(post.id)
+                              setReportReason('')
+                            }}
+                            className="text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
+                            title="Report post"
+                          >
+                            <Flag className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {post.project_showcase?.live_url && (
+                        <a
+                          href={post.project_showcase.live_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 font-pixel uppercase"
+                        >
+                          <span>Demo</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </GamifiedCard>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Report Modal */}
+      {reportingPostId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-left flex flex-col gap-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Flag className="w-4 h-4 text-rose-500" />
+                <h4 className="font-pixel text-xs font-bold uppercase text-slate-900">Report Inappropriate Content</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReportingPostId(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {reportSuccess ? (
+              <div className="p-4 text-center text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl">
+                Thank you. Our moderation staff has received your report.
+              </div>
+            ) : (
+              <form onSubmit={handleReportPost} className="flex flex-col gap-3">
+                <p className="text-xs text-slate-600">
+                  Please explain why this content violates CodeDex community guidelines:
+                </p>
+                <textarea
+                  required
+                  rows={3}
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  placeholder="e.g. Spam, harassment, inappropriate link..."
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-rose-500 outline-none"
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setReportingPostId(null)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold font-pixel uppercase rounded-xl cursor-pointer"
+                  >
+                    Submit Report
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredShowcases.map((showcase) => (
-              <GamifiedCard key={showcase.id} className="flex flex-col justify-between p-6 border-2 border-slate-100">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-pixel text-amber-700 bg-amber-100 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" />
-                      <span>Community Build</span>
-                    </span>
-                    {(isAdmin || role === 'admin' || showcase.user_id === user?.id) && (
+        </div>
+      )}
+
+      {/* Comments Drawer / Dialog */}
+      {activeCommentPost && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl border border-slate-100 text-left flex flex-col gap-4 animate-fade-in">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900 font-pixel uppercase flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-emerald-600" />
+                  <span>Discussion & Feedback</span>
+                </h3>
+                <p className="text-xs text-slate-500">Post by @{activeCommentPost.author_name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveCommentPost(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Original Post Snippet */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed">
+              {activeCommentPost.content}
+            </div>
+
+            {/* Comments List */}
+            <div className="flex flex-col gap-2.5 max-h-56 overflow-y-auto py-1">
+              {loadingComments ? (
+                <div className="py-6 text-center text-slate-400 font-pixel text-xs">
+                  LOADING COMMENTS...
+                </div>
+              ) : postComments.length === 0 ? (
+                <div className="py-6 text-center text-slate-400 font-pixel text-xs">
+                  NO COMMENTS YET. START THE CONVERSATION!
+                </div>
+              ) : (
+                postComments.map((comment) => (
+                  <div key={comment.id} className="p-3 rounded-xl bg-slate-50/70 border border-slate-100 flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="font-bold text-xs text-slate-900 font-mono">@{comment.author_name}</span>
+                        {comment.author_role === 'admin' && (
+                          <span className="px-1.5 py-0.2 rounded text-[7px] font-pixel uppercase font-bold bg-purple-100 text-purple-700">
+                            STAFF
+                          </span>
+                        )}
+                        <span className="text-[9px] text-slate-400">{new Date(comment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="text-xs text-slate-700 leading-snug">{comment.content}</p>
+                    </div>
+
+                    {(isAdmin || role === 'admin' || comment.user_id === user?.id) && (
                       <button
                         type="button"
-                        onClick={() => removeShowcase(showcase.id)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        title="Remove Showcase"
+                        onClick={() => handleDeleteComment(comment.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                        title="Delete Comment"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     )}
                   </div>
+                ))
+              )}
+            </div>
 
-                  <h3 className="font-bold text-base text-slate-900 mb-1">{showcase.title}</h3>
-                  <div className="text-[11px] font-medium text-emerald-600 mb-3">
-                    Project: {showcase.project_title}
-                  </div>
-
-                  <p className="text-xs text-slate-600 mb-4 leading-relaxed line-clamp-4">
-                    {showcase.description}
-                  </p>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-500 font-mono">
-                    By @{showcase.author_name}
-                  </span>
-
-                  {showcase.live_url && (
-                    <a
-                      href={showcase.live_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 font-pixel uppercase"
-                    >
-                      <span>Live Demo</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </div>
-              </GamifiedCard>
-            ))}
+            {/* Add Comment Input */}
+            <form onSubmit={handleAddComment} className="pt-2 border-t border-slate-100 flex gap-2">
+              <input
+                type="text"
+                required
+                value={newCommentText}
+                onChange={(e) => setNewCommentText(e.target.value)}
+                placeholder="Write a supportive comment or question..."
+                className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-pixel text-xs font-bold uppercase transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Send</span>
+              </button>
+            </form>
           </div>
-        )
+        </div>
       )}
 
       {/* Project Detail & Progress Modal */}
@@ -614,7 +1008,7 @@ export const ProjectsPage: React.FC = () => {
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <h4 className="font-pixel text-sm font-bold text-emerald-900 uppercase">Build Published!</h4>
-                <p className="text-xs text-slate-500">Your masterpiece is now visible in the Community Showcase tab.</p>
+                <p className="text-xs text-slate-500">Your masterpiece is now visible in the Community feed.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmitShowcaseForm} className="flex flex-col gap-4">

@@ -36,7 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
-  const [role, setRole] = useState<UserRole>('learner')
+  const [role, setRole] = useState<UserRole>('student')
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
 
@@ -51,26 +51,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle()
 
       if (!error && data) {
-        const verifiedRole: UserRole = data.role === 'admin' ? 'admin' : 'learner'
+        const verifiedRole: UserRole = data.role === 'admin' ? 'admin' : 'student'
         return {
           id: data.id,
           email: data.email || currentUser.email || '',
-          username: data.username || currentUser.email?.split('@')[0] || 'Adventurer',
-          full_name: data.full_name || data.username || 'Adventurer',
-          avatar_url: data.avatar_url,
+          username: data.username || currentUser.user_metadata?.username || currentUser.email?.split('@')[0] || 'Adventurer',
+          full_name: data.full_name || currentUser.user_metadata?.full_name || data.username || 'Adventurer',
+          avatar_url: data.avatar_url || currentUser.user_metadata?.avatar_url,
           role: verifiedRole,
-          xp: data.xp ?? 120,
-          streak: data.streak ?? 3,
-          level: data.level ?? (verifiedRole === 'admin' ? 99 : 2),
+          xp: data.xp ?? 0,
+          streak: data.streak ?? 0,
+          level: data.level ?? (verifiedRole === 'admin' ? 99 : 1),
+          daily_goal_xp: data.daily_goal_xp ?? 50,
+          daily_xp_earned: data.daily_xp_earned ?? 0,
           created_at: data.created_at,
         }
       }
     } catch {
-      // Fallback to validated auth user metadata if database table not yet populated
+      // Fallback to validated auth user metadata if database table query fails
     }
 
     const meta = currentUser.user_metadata || {}
-    const fallbackRole: UserRole = meta.role === 'admin' ? 'admin' : 'learner'
+    const fallbackRole: UserRole = meta.role === 'admin' ? 'admin' : 'student'
     return {
       id: currentUser.id,
       email: currentUser.email || '',
@@ -78,9 +80,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       full_name: meta.full_name || meta.username || 'Adventurer',
       avatar_url: meta.avatar_url,
       role: fallbackRole,
-      xp: meta.xp || (fallbackRole === 'admin' ? 9999 : 120),
-      streak: meta.streak || 3,
-      level: meta.level || (fallbackRole === 'admin' ? 99 : 2),
+      xp: typeof meta.xp === 'number' ? meta.xp : (fallbackRole === 'admin' ? 9999 : 0),
+      streak: typeof meta.streak === 'number' ? meta.streak : 0,
+      level: typeof meta.level === 'number' ? meta.level : (fallbackRole === 'admin' ? 99 : 1),
+      daily_goal_xp: typeof meta.daily_goal_xp === 'number' ? meta.daily_goal_xp : 50,
+      daily_xp_earned: typeof meta.daily_xp_earned === 'number' ? meta.daily_xp_earned : 0,
       created_at: currentUser.created_at,
     }
   }, [])
@@ -89,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const updated = await fetchProfile(user)
       setProfile(updated)
-      setRole(updated?.role || 'learner')
+      setRole(updated?.role || 'student')
     }
   }, [user, fetchProfile])
 
@@ -106,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (currentUser) {
           const userProfile = await fetchProfile(currentUser)
           setProfile(userProfile)
-          setRole(userProfile?.role || 'learner')
+          setRole(userProfile?.role || 'student')
         }
       } catch (err) {
         console.error('Error initializing auth session:', err)
@@ -125,10 +129,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentUser) {
         const userProfile = await fetchProfile(currentUser)
         setProfile(userProfile)
-        setRole(userProfile?.role || 'learner')
+        setRole(userProfile?.role || 'student')
       } else {
         setProfile(null)
-        setRole('learner')
+        setRole('student')
       }
       setLoading(false)
     })
@@ -151,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.user) {
         const userProfile = await fetchProfile(data.user)
         setProfile(userProfile)
-        setRole(userProfile?.role || 'learner')
+        setRole(userProfile?.role || 'student')
       }
 
       return { error: null }
@@ -203,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null)
       setSession(null)
       setProfile(null)
-      setRole('learner')
+      setRole('student')
       return { error }
     } catch (err) {
       return { error: err as Error }

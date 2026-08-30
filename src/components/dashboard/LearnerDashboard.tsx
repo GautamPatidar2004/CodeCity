@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { GamifiedCard } from '../ui/GamifiedCard'
 import { GamifiedButton } from '../ui/GamifiedButton'
 import { useAuth } from '../../context/AuthContext'
 import { useLearningProgress } from '../../lib/learning'
 import { useGamification } from '../../lib/gamification'
 import { useAchievementsAndNotifications } from '../../lib/achievements'
+import { LessonModal } from '../learning/LessonModal'
 import {
   Flame,
   Star,
@@ -16,40 +17,71 @@ import {
   Award,
   Clock,
 } from 'lucide-react'
-import confetti from 'canvas-confetti'
 
 export const LearnerDashboard: React.FC = () => {
-  const { user, profile } = useAuth()
-  const { courses, resumePoint, completeLesson } = useLearningProgress(user?.id)
-  const { stats, awardXp } = useGamification(user?.id, profile?.xp, profile?.streak, profile?.level)
-  const { badges, achievements, activities, logAction } =
+  const { user, profile, loading: authLoading } = useAuth()
+  const { courses, resumePoint, refreshProgress, loading: learningLoading } = useLearningProgress(user?.id)
+  const { stats, refreshGamification, loading: gamificationLoading } = useGamification(user?.id, profile?.xp, profile?.streak, profile?.level)
+  const { badges, achievements, activities, refreshAll, loading: achievementsLoading } =
     useAchievementsAndNotifications(user?.id)
 
-  const username = profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'Adventurer'
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
 
-  const handleCompleteQuest = async (courseId: string, lessonId?: string, courseTitle?: string) => {
-    if (!lessonId) return
-    await completeLesson(courseId, lessonId)
-    await awardXp(50, 'lesson_completed', lessonId)
-    await logAction('lesson_completed', `Completed quest in ${courseTitle || 'Course'}`)
-    confetti({
-      particleCount: 60,
-      spread: 60,
-      origin: { y: 0.7 },
-    })
+  const isLoading = authLoading || (Boolean(user?.id) && (learningLoading || gamificationLoading || achievementsLoading))
+  const username = profile?.full_name || profile?.username || user?.user_metadata?.full_name || user?.user_metadata?.username || user?.email?.split('@')[0] || 'Adventurer'
+
+  const handleOpenLesson = (lessonId?: string) => {
+    if (lessonId) {
+      setActiveLessonId(lessonId)
+    }
+  }
+
+  const handleLessonRefresh = () => {
+    refreshProgress()
+    refreshGamification()
+    refreshAll()
+  }
+
+  if (isLoading) {
+    return (
+      <div className="w-full max-w-6xl mx-auto flex flex-col gap-8 pb-12 animate-pulse text-left">
+        <div className="h-44 bg-slate-200/70 rounded-3xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="h-32 bg-slate-200/70 rounded-3xl" />
+          <div className="h-32 bg-slate-200/70 rounded-3xl" />
+          <div className="h-32 bg-slate-200/70 rounded-3xl" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="h-64 bg-slate-200/70 rounded-3xl" />
+          <div className="h-64 bg-slate-200/70 rounded-3xl" />
+        </div>
+        <div className="h-64 bg-slate-200/70 rounded-3xl" />
+      </div>
+    )
   }
 
   return (
     <div className="w-full max-w-6xl mx-auto flex flex-col gap-8 pb-12">
+      {/* Active Lesson Modal */}
+      {activeLessonId && (
+        <LessonModal
+          lessonId={activeLessonId}
+          userId={user?.id}
+          onClose={() => setActiveLessonId(null)}
+          onLessonCompleted={handleLessonRefresh}
+          onNavigateLesson={(nextId) => setActiveLessonId(nextId)}
+        />
+      )}
+
       {/* Mascot Welcome & Resume Learning Card */}
       <GamifiedCard accentColor="emerald" className="flex flex-col sm:flex-row items-center gap-6 p-8 bg-gradient-to-r from-emerald-500/10 via-white to-white">
         <div className="shrink-0 relative">
           <img
-            src="/bouncingbot.webp"
-            alt="Companion Mascot"
-            className="w-24 h-24 pixelated drop-shadow-xl animate-float"
+            src={profile?.avatar_url || '/bouncingbot.webp'}
+            alt={username}
+            className="w-24 h-24 pixelated drop-shadow-xl animate-float rounded-2xl object-cover"
             onError={(e) => {
-              e.currentTarget.style.display = 'none'
+              e.currentTarget.src = '/bouncingbot.webp'
             }}
           />
           <div className="absolute -top-1 -right-1 text-amber-400 animate-twinkle">
@@ -82,7 +114,7 @@ export const LearnerDashboard: React.FC = () => {
               <GamifiedButton
                 variant="secondary"
                 size="sm"
-                onClick={() => handleCompleteQuest(resumePoint.courseId, resumePoint.lessonId, resumePoint.courseTitle)}
+                onClick={() => handleOpenLesson(resumePoint.lessonId)}
                 className="flex items-center gap-1.5"
               >
                 <PlayCircle className="w-4 h-4" />
@@ -110,9 +142,9 @@ export const LearnerDashboard: React.FC = () => {
             <Star className="w-8 h-8 fill-emerald-500" />
           </div>
           <h3 className="font-bold text-base text-slate-900 font-pixel uppercase text-emerald-600">
-            {stats.xp} XP
+            {stats.xp.toLocaleString()} XP
           </h3>
-          <div className="w-full flex items-center gap-1.5 text-[11px] text-slate-500 font-medium mt-1">
+          <div className="w-full flex items-center justify-center gap-1.5 text-[11px] text-slate-500 font-medium mt-1">
             <Target className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span>Daily Goal: {stats.dailyXpEarned}/{stats.dailyGoalXp} XP ({stats.dailyGoalPercent}%)</span>
           </div>
@@ -125,7 +157,7 @@ export const LearnerDashboard: React.FC = () => {
           <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
             Level {stats.level}
           </h3>
-          <p className="text-xs text-slate-500 font-medium">Next Lvl in {stats.nextLevelXp - stats.xp} XP</p>
+          <p className="text-xs text-slate-500 font-medium">Next Lvl in {Math.max(0, stats.nextLevelXp - stats.xp)} XP</p>
         </GamifiedCard>
       </div>
 
@@ -142,21 +174,27 @@ export const LearnerDashboard: React.FC = () => {
               {badges.filter((b) => b.isUnlocked).length}/{badges.length}
             </span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {badges.map((b) => (
-              <div
-                key={b.id}
-                className={`p-3 rounded-2xl border flex flex-col items-center text-center gap-1.5 transition-all ${
-                  b.isUnlocked
-                    ? 'bg-amber-50/60 border-amber-200 shadow-sm'
-                    : 'bg-slate-50 border-slate-100 opacity-50 grayscale'
-                }`}
-              >
-                <span className="text-2xl">{b.icon}</span>
-                <span className="font-bold text-xs text-slate-800 leading-tight">{b.title}</span>
-              </div>
-            ))}
-          </div>
+          {badges.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 font-pixel text-[10px]">
+              NO BADGES IN THE REALM YET
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {badges.map((b) => (
+                <div
+                  key={b.id}
+                  className={`p-3 rounded-2xl border flex flex-col items-center text-center gap-1.5 transition-all ${
+                    b.isUnlocked
+                      ? 'bg-amber-50/60 border-amber-200 shadow-sm'
+                      : 'bg-slate-50 border-slate-100 opacity-40 grayscale'
+                  }`}
+                >
+                  <span className="text-2xl">{b.icon}</span>
+                  <span className="font-bold text-xs text-slate-800 leading-tight">{b.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </GamifiedCard>
 
         {/* Quick Achievements */}
@@ -170,25 +208,31 @@ export const LearnerDashboard: React.FC = () => {
               {achievements.filter((a) => a.isUnlocked).length}/{achievements.length}
             </span>
           </div>
-          <div className="flex flex-col gap-2.5">
-            {achievements.map((a) => (
-              <div
-                key={a.id}
-                className={`p-3 rounded-2xl border flex items-center justify-between ${
-                  a.isUnlocked ? 'bg-purple-50/50 border-purple-200' : 'bg-slate-50 border-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl">{a.icon}</span>
-                  <div>
-                    <div className="font-bold text-xs text-slate-900">{a.title}</div>
-                    <div className="text-[10px] text-slate-500">{a.description}</div>
+          {achievements.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 font-pixel text-[10px]">
+              NO ACHIEVEMENTS DISCOVERED YET
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {achievements.map((a) => (
+                <div
+                  key={a.id}
+                  className={`p-3 rounded-2xl border flex items-center justify-between ${
+                    a.isUnlocked ? 'bg-purple-50/50 border-purple-200' : 'bg-slate-50 border-slate-100 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">{a.icon}</span>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900">{a.title}</div>
+                      <div className="text-[10px] text-slate-500">{a.description}</div>
+                    </div>
                   </div>
+                  <span className="text-xs font-pixel font-bold text-amber-500">+{a.rewardXp} XP</span>
                 </div>
-                <span className="text-xs font-pixel font-bold text-amber-500">+{a.rewardXp} XP</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </GamifiedCard>
       </div>
 
@@ -206,57 +250,63 @@ export const LearnerDashboard: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {courses.map(({ course, completedLessons, totalLessons, progressPercent, nextLesson }) => {
-            const isDone = progressPercent === 100
-            return (
-              <GamifiedCard
-                key={course.id}
-                className={`flex flex-col justify-between p-6 border-2 transition-all ${
-                  isDone ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-100 hover:border-slate-300'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-pixel text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded font-bold">
-                      {course.track}
-                    </span>
-                    <span className="text-xs font-pixel text-slate-500 font-bold">
-                      {completedLessons}/{totalLessons} ({progressPercent}%)
-                    </span>
+        {courses.length === 0 ? (
+          <div className="p-10 text-center bg-white rounded-3xl border border-slate-100 text-slate-400 font-pixel text-xs">
+            NO COURSES PUBLISHED IN THE REALM YET
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {courses.map(({ course, completedLessons, totalLessons, progressPercent, nextLesson }) => {
+              const isDone = progressPercent === 100
+              return (
+                <GamifiedCard
+                  key={course.id}
+                  className={`flex flex-col justify-between p-6 border-2 transition-all ${
+                    isDone ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-100 hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] font-pixel text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                        {course.track}
+                      </span>
+                      <span className="text-xs font-pixel text-slate-500 font-bold">
+                        {completedLessons}/{totalLessons} ({progressPercent}%)
+                      </span>
+                    </div>
+
+                    <h4 className="font-bold text-base text-slate-900 mb-2">{course.title}</h4>
+                    <p className="text-xs text-slate-500 mb-4 leading-relaxed">{course.description}</p>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
+                      <div
+                        className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
                   </div>
 
-                  <h4 className="font-bold text-base text-slate-900 mb-2">{course.title}</h4>
-                  <p className="text-xs text-slate-500 mb-4 leading-relaxed">{course.description}</p>
-
-                  {/* Progress Bar */}
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                </div>
-
-                {isDone ? (
-                  <div className="w-full py-2.5 bg-emerald-100 text-emerald-800 rounded-xl font-pixel text-[10px] font-bold flex items-center justify-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>COURSE COMPLETED</span>
-                  </div>
-                ) : (
-                  <GamifiedButton
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleCompleteQuest(course.id, nextLesson?.id, course.title)}
-                    className="w-full"
-                  >
-                    {nextLesson ? `Complete: ${nextLesson.title}` : 'Start Course'} ⚔️
-                  </GamifiedButton>
-                )}
-              </GamifiedCard>
-            )
-          })}
-        </div>
+                  {isDone ? (
+                    <div className="w-full py-2.5 bg-emerald-100 text-emerald-800 rounded-xl font-pixel text-[10px] font-bold flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>COURSE COMPLETED</span>
+                    </div>
+                  ) : (
+                    <GamifiedButton
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleOpenLesson(nextLesson?.id)}
+                      className="w-full"
+                    >
+                      {nextLesson ? `Learn: ${nextLesson.title}` : 'Start Course'} ⚔️
+                    </GamifiedButton>
+                  )}
+                </GamifiedCard>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Recent Activity History Section */}
@@ -265,14 +315,20 @@ export const LearnerDashboard: React.FC = () => {
           <Clock className="w-4 h-4 text-slate-500" />
           <h3 className="font-pixel text-xs font-bold text-slate-900 uppercase">Recent Activity</h3>
         </div>
-        <div className="flex flex-col gap-2.5">
-          {activities.map((act) => (
-            <div key={act.id} className="flex items-center justify-between text-xs py-2 border-b border-slate-100 last:border-0">
-              <span className="font-medium text-slate-700">{act.title}</span>
-              <span className="text-[10px] text-slate-400 font-mono">{act.createdAt}</span>
-            </div>
-          ))}
-        </div>
+        {activities.length === 0 ? (
+          <div className="py-6 text-center text-slate-400 font-pixel text-[10px]">
+            NO RECENT QUEST ACTIONS RECORDED
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {activities.map((act) => (
+              <div key={act.id} className="flex items-center justify-between text-xs py-2 border-b border-slate-100 last:border-0">
+                <span className="font-medium text-slate-700">{act.title}</span>
+                <span className="text-[10px] text-slate-400 font-mono">{act.createdAt}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

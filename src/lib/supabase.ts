@@ -11,7 +11,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
-export type UserRole = 'learner' | 'admin'
+export type UserRole = 'student' | 'admin'
 
 export interface UserProfile {
   id: string
@@ -23,5 +23,7 @@ export interface UserProfile {
   xp?: number
   streak?: number
   level?: number
+  daily_goal_xp?: number
+  daily_xp_earned?: number
   created_at?: string
 }
