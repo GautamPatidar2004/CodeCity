@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Mulish', system-ui, -apple-system, sans-serif;
+    --font-pixel: 'Press Start 2P', monospace;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+
+    --primary: #fbbf24;
+    --primary-foreground: #0f172a;
+    --secondary: #10b981;
+    --secondary-foreground: #ffffff;
+    --accent: #c084fc;
+    --accent-foreground: #0f172a;
+
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --border: #e2e8f0;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+}
+
+/* Custom Typography Utilities */
+.font-pixel {
+  font-family: 'Press Start 2P', monospace, cursive;
+}
+
+.font-sans {
+  font-family: 'Mulish', system-ui, -apple-system, sans-serif;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* 3D Tactile Gamified Button */
+.btn-3d {
+  position: relative;
+  transition: all 0.15s ease-in-out;
+  border-bottom-width: 4px;
+}
+
+.btn-3d:active {
+  transform: translateY(2px);
+  border-bottom-width: 1px;
+}
+
+/* Custom Keyframe Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes float-delayed {
+  0%, 100% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes neon-glow-cyan {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6)) drop-shadow(0 0 12px rgba(56, 189, 248, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.9)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.6));
+  }
+}
+
+@keyframes neon-glow-orange {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.6)) drop-shadow(0 0 12px rgba(249, 115, 22, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.9)) drop-shadow(0 0 20px rgba(249, 115, 22, 0.6));
+  }
+}
+
+@keyframes neon-glow-yellow {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(234, 179, 8, 0.6)) drop-shadow(0 0 12px rgba(234, 179, 8, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(234, 179, 8, 0.9)) drop-shadow(0 0 20px rgba(234, 179, 8, 0.6));
+  }
+}
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+  }
+  50% {
+    box-shadow: 0 6px 24px rgba(16, 185, 129, 0.7);
+  }
+}
+
+.animate-float {
+  animation: float 3.5s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 4.8s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 4s ease-in-out infinite;
+}
+
+.animate-neon-cyan {
+  animation: neon-glow-cyan 3s ease-in-out infinite;
+}
+
+.animate-neon-orange {
+  animation: neon-glow-orange 3.2s ease-in-out infinite;
+}
+
+.animate-neon-yellow {
+  animation: neon-glow-yellow 2.8s ease-in-out infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle 2.5s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
