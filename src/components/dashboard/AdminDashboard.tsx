@@ -16,6 +16,7 @@ import {
   createAdminChallenge,
   updateAdminChallenge,
   deleteAdminChallenge,
+  reorderChallenges,
   type Challenge,
 } from '../../lib/challenges'
 import {
@@ -23,6 +24,7 @@ import {
   createAdminTestCase,
   updateAdminTestCase,
   deleteAdminTestCase,
+  reorderTestCases,
   type ExerciseTestCase,
 } from '../../lib/submissions'
 import {
@@ -38,11 +40,28 @@ import {
   createAdminCourse,
   updateAdminCourse,
   deleteAdminCourse,
+  reorderCourses,
   createAdminChapter,
+  updateAdminChapter,
   deleteAdminChapter,
+  reorderChapters,
   createAdminLesson,
+  updateAdminLesson,
   deleteAdminLesson,
+  reorderLessons,
+  fetchLanguages,
+  createLanguage,
+  updateLanguage,
+  deleteLanguage,
+  reorderLanguages,
+  fetchAdminLearningPaths,
+  createAdminLearningPath,
+  updateAdminLearningPath,
+  deleteAdminLearningPath,
+  reorderLearningPaths,
   fetchCoursesWithProgress,
+  type Language,
+  type LearningPath,
   type CourseProgressSummary,
 } from '../../lib/learning'
 import {
@@ -77,6 +96,13 @@ import {
   Zap,
   UserCheck,
   X,
+  ArrowUp,
+  ArrowDown,
+  Edit3,
+  Globe,
+  Compass,
+  FileText,
+  Sparkles,
 } from 'lucide-react'
 
 interface LearnerRecord {
@@ -109,9 +135,11 @@ export const AdminDashboard: React.FC = () => {
 
   // Coding Exercises Admin State
   const [adminChallenges, setAdminChallenges] = useState<Challenge[]>([])
-  const [adminLessons, setAdminLessons] = useState<{ id: string; title: string; course_id: string }[]>([])
+  const [adminLessons, setAdminLessons] = useState<{ id: string; title: string; course_id: string; course_title?: string; chapter_title?: string }[]>([])
   const [showAddExercise, setShowAddExercise] = useState(false)
+  const [editingExercise, setEditingExercise] = useState<Challenge | null>(null)
   const [exTitle, setExTitle] = useState('')
+  const [exSlug, setExSlug] = useState('')
   const [exLanguage, setExLanguage] = useState('javascript')
   const [exDifficulty, setExDifficulty] = useState('Beginner')
   const [exLessonId, setExLessonId] = useState('')
@@ -120,6 +148,8 @@ export const AdminDashboard: React.FC = () => {
   const [exSampleInput, setExSampleInput] = useState('')
   const [exHint, setExHint] = useState('')
   const [exSolution, setExSolution] = useState('')
+  const [exSolutionCode, setExSolutionCode] = useState('')
+  const [exXpReward, setExXpReward] = useState(75)
   const [exerciseAlert, setExerciseAlert] = useState<string | null>(null)
 
   // Test Case Management State
@@ -128,6 +158,8 @@ export const AdminDashboard: React.FC = () => {
   const [tcInput, setTcInput] = useState('')
   const [tcExpectedOutput, setTcExpectedOutput] = useState('')
   const [tcIsHidden, setTcIsHidden] = useState(false)
+  const [tcIsActive, setTcIsActive] = useState(true)
+  const [editingTestCase, setEditingTestCase] = useState<ExerciseTestCase | null>(null)
 
   // Project Steps Management State
   const [selectedProjectForSteps, setSelectedProjectForSteps] = useState<Project | null>(null)
@@ -140,21 +172,82 @@ export const AdminDashboard: React.FC = () => {
   const [adminPosts, setAdminPosts] = useState<CommunityPost[]>([])
 
   // Course & Curriculum Studio State
+  const [curriculumTab, setCurriculumTab] = useState<'courses' | 'languages' | 'paths'>('courses')
+
+  // Languages State
+  const [adminLanguages, setAdminLanguages] = useState<Language[]>([])
+  const [showAddLanguage, setShowAddLanguage] = useState(false)
+  const [editingLanguage, setEditingLanguage] = useState<Language | null>(null)
+  const [langName, setLangName] = useState('')
+  const [langSlug, setLangSlug] = useState('')
+  const [langIcon, setLangIcon] = useState('🐍')
+  const [langColor, setLangColor] = useState('#10b981')
+  const [langDesc, setLangDesc] = useState('')
+
+  // Learning Paths / Islands State
+  const [adminPaths, setAdminPaths] = useState<LearningPath[]>([])
+  const [showAddPath, setShowAddPath] = useState(false)
+  const [editingPath, setEditingPath] = useState<LearningPath | null>(null)
+  const [pathTitle, setPathTitle] = useState('')
+  const [pathSlug, setPathSlug] = useState('')
+  const [pathIslandName, setPathIslandName] = useState('')
+  const [pathIcon, setPathIcon] = useState('🏝️')
+  const [pathLanguageId, setPathLanguageId] = useState('')
+  const [pathDesc, setPathDesc] = useState('')
+
+  // Course State
   const [adminCourses, setAdminCourses] = useState<CourseProgressSummary[]>([])
   const [showAddCourse, setShowAddCourse] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<CourseProgressSummary | null>(null)
   const [courseTitle, setCourseTitle] = useState('')
   const [courseSlug, setCourseSlug] = useState('')
   const [courseTrack, setCourseTrack] = useState('JavaScript')
   const [courseDifficulty, setCourseDifficulty] = useState('Beginner')
+  const [courseLanguageId, setCourseLanguageId] = useState('')
+  const [coursePathId, setCoursePathId] = useState('')
+  const [coursePrereqId, setCoursePrereqId] = useState('')
   const [courseDesc, setCourseDesc] = useState('')
 
+  // Curriculum Editor (Course -> Chapters -> Lessons) State
   const [selectedCourseForCurriculum, setSelectedCourseForCurriculum] = useState<CourseProgressSummary | null>(null)
   const [newChapterTitle, setNewChapterTitle] = useState('')
+  const [editingChapter, setEditingChapter] = useState<{ id: string; title: string } | null>(null)
+
   const [selectedChapterIdForLesson, setSelectedChapterIdForLesson] = useState<string | null>(null)
+  const [editingLesson, setEditingLesson] = useState<{
+    id: string
+    chapterId: string
+    title: string
+    slug: string
+    summary: string
+    content: string
+  } | null>(null)
+
+  const DEFAULT_LESSON_CONTENT_TEMPLATE = `### 1. Explanation
+Explain the core concept here in clear, engaging terms.
+
+### 2. Code Examples
+\`\`\`javascript
+// Example Code
+const adventurer = "Hero";
+console.log(\`Welcome, \${adventurer}!\`);
+\`\`\`
+
+### 3. Step-by-Step Instructions
+1. Declare your variables.
+2. Initialize them with the appropriate values.
+3. Print or return the result.
+
+### 4. Hint
+Look closely at the syntax and variable declaration rules.
+
+### 5. Solution & Deep Dive
+A comprehensive explanation of the solution logic.`
+
   const [newLessonTitle, setNewLessonTitle] = useState('')
   const [newLessonSlug, setNewLessonSlug] = useState('')
   const [newLessonSummary, setNewLessonSummary] = useState('')
-  const [newLessonContent, setNewLessonContent] = useState('')
+  const [newLessonContent, setNewLessonContent] = useState(DEFAULT_LESSON_CONTENT_TEMPLATE)
 
   // Platform Analytics & Audit Logs State
   const [analytics, setAnalytics] = useState<PlatformAnalytics | null>(null)
@@ -165,6 +258,16 @@ export const AdminDashboard: React.FC = () => {
   const loadAdminProjects = useCallback(async () => {
     const data = await fetchProjects(undefined, true)
     setAdminProjects(data)
+  }, [])
+
+  const loadAdminLanguages = useCallback(async () => {
+    const data = await fetchLanguages(true)
+    setAdminLanguages(data)
+  }, [])
+
+  const loadAdminPaths = useCallback(async () => {
+    const data = await fetchAdminLearningPaths()
+    setAdminPaths(data)
   }, [])
 
   const loadAdminCourses = useCallback(async () => {
@@ -194,8 +297,12 @@ export const AdminDashboard: React.FC = () => {
     const data = await fetchAdminChallenges()
     setAdminChallenges(data)
 
-    const { data: chaptersData } = await supabase.from('chapters').select('id, course_id')
+    const { data: coursesData } = await supabase.from('courses').select('id, title')
+    const courseTitleMap = new Map((coursesData || []).map((c) => [c.id, c.title]))
+
+    const { data: chaptersData } = await supabase.from('chapters').select('id, title, course_id')
     const chapterCourseMap = new Map((chaptersData || []).map((c) => [c.id, c.course_id]))
+    const chapterTitleMap = new Map((chaptersData || []).map((c) => [c.id, c.title]))
 
     const { data: lessonsData } = await supabase
       .from('lessons')
@@ -204,17 +311,24 @@ export const AdminDashboard: React.FC = () => {
 
     if (lessonsData) {
       setAdminLessons(
-        lessonsData.map((l) => ({
-          id: l.id,
-          title: l.title,
-          course_id: chapterCourseMap.get(l.chapter_id) || '',
-        }))
+        lessonsData.map((l) => {
+          const courseId = chapterCourseMap.get(l.chapter_id) || ''
+          const courseTitle = courseTitleMap.get(courseId) || 'Course'
+          const chapterTitle = chapterTitleMap.get(l.chapter_id) || 'Chapter'
+          return {
+            id: l.id,
+            title: l.title,
+            course_id: courseId,
+            course_title: courseTitle,
+            chapter_title: chapterTitle,
+          }
+        })
       )
     }
   }, [])
 
   const loadTestCasesForSelected = useCallback(async (exerciseId: string) => {
-    const tests = await fetchExerciseTestCases(exerciseId)
+    const tests = await fetchExerciseTestCases(exerciseId, true)
     setExerciseTestCases(tests)
   }, [])
 
@@ -248,13 +362,24 @@ export const AdminDashboard: React.FC = () => {
 
     if (isAdmin) {
       loadLearners()
+      loadAdminLanguages()
+      loadAdminPaths()
+      loadAdminCourses()
       loadAdminProjects()
       loadAdminChallenges()
       loadAdminCommunity()
-      loadAdminCourses()
       loadAdminAnalyticsAndLogs()
     }
-  }, [isAdmin, loadAdminProjects, loadAdminChallenges, loadAdminCommunity, loadAdminCourses, loadAdminAnalyticsAndLogs])
+  }, [
+    isAdmin,
+    loadAdminLanguages,
+    loadAdminPaths,
+    loadAdminCourses,
+    loadAdminProjects,
+    loadAdminChallenges,
+    loadAdminCommunity,
+    loadAdminAnalyticsAndLogs,
+  ])
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -313,6 +438,30 @@ export const AdminDashboard: React.FC = () => {
     }
   }
 
+  const handleOpenChallengeEditorForLesson = async (lessonId: string) => {
+    const existing = adminChallenges.find((ch) => ch.lesson_id === lessonId)
+    if (existing) {
+      handleEditExercise(existing)
+    } else {
+      const targetLes = adminLessons.find((l) => l.id === lessonId)
+      setEditingExercise(null)
+      setShowAddExercise(true)
+      setExLessonId(lessonId)
+      setExTitle(targetLes?.title ? `Challenge: ${targetLes.title}` : 'New Coding Quest')
+      setExSlug('')
+      const defaultLang = selectedCourseForCurriculum?.course.track.toLowerCase().includes('python') ? 'python' : 'javascript'
+      setExLanguage(defaultLang)
+      setExDifficulty(selectedCourseForCurriculum?.course.difficulty || 'Beginner')
+      setExInstructions('Solve the problem according to the instructions.')
+      setExStarterCode('// Write your solution below:\n')
+      setExSampleInput('')
+      setExHint('')
+      setExSolution('')
+      setExSolutionCode('')
+      setExXpReward(75)
+    }
+  }
+
   const handleCreateExercise = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!exTitle.trim()) return
@@ -320,7 +469,8 @@ export const AdminDashboard: React.FC = () => {
     const matchedLesson = adminLessons.find((l) => l.id === exLessonId)
 
     const created = await createAdminChallenge({
-      title: exTitle,
+      title: exTitle.trim(),
+      slug: exSlug.trim() || undefined,
       language: exLanguage,
       category: exLanguage === 'python' ? 'Python' : exLanguage === 'cpp' ? 'C++' : exLanguage === 'java' ? 'Java' : 'JavaScript',
       difficulty: exDifficulty,
@@ -332,39 +482,127 @@ export const AdminDashboard: React.FC = () => {
       course_id: matchedLesson?.course_id || undefined,
       hints: exHint.trim() ? [exHint.trim()] : [],
       solution_explanation: exSolution.trim() || undefined,
+      solution_code: exSolutionCode.trim() || undefined,
+      xp_reward: exXpReward >= 0 ? exXpReward : 75,
       is_published: true,
       order_index: adminChallenges.length + 1,
     })
 
     if (created) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'CREATE_CHALLENGE', 'challenge', created.id, { title: exTitle, language: exLanguage })
+      }
       setExerciseAlert('Coding exercise successfully authored and published!')
       setShowAddExercise(false)
       setExTitle('')
+      setExSlug('')
       setExLessonId('')
       setExInstructions('')
       setExStarterCode('')
       setExSampleInput('')
       setExHint('')
       setExSolution('')
-      loadAdminChallenges()
+      setExSolutionCode('')
+      setExXpReward(75)
+      await loadAdminChallenges()
+      setTimeout(() => setExerciseAlert(null), 4000)
+    }
+  }
+
+  const handleEditExercise = async (ch: Challenge) => {
+    setEditingExercise(ch)
+    setExTitle(ch.title)
+    setExSlug(ch.slug)
+    setExLanguage(ch.language || 'javascript')
+    setExDifficulty(ch.difficulty || 'Beginner')
+    setExLessonId(ch.lesson_id || '')
+    setExInstructions(ch.instructions || ch.description || '')
+    setExStarterCode(ch.starter_code || '')
+    setExSampleInput(ch.sample_input || '')
+    setExHint((ch.hints && ch.hints[0]) || '')
+    setExSolution(ch.solution_explanation || '')
+    setExSolutionCode(ch.solution_code || '')
+    setExXpReward(ch.xp_reward ?? 75)
+    await loadTestCasesForSelected(ch.id)
+  }
+
+  const handleUpdateExercise = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingExercise || !exTitle.trim()) return
+
+    const matchedLesson = adminLessons.find((l) => l.id === exLessonId)
+    const ok = await updateAdminChallenge(editingExercise.id, {
+      title: exTitle.trim(),
+      slug: exSlug.trim() || editingExercise.slug,
+      language: exLanguage,
+      category: exLanguage === 'python' ? 'Python' : exLanguage === 'cpp' ? 'C++' : exLanguage === 'java' ? 'Java' : 'JavaScript',
+      difficulty: exDifficulty,
+      description: exInstructions,
+      instructions: exInstructions,
+      starter_code: exStarterCode,
+      sample_input: exSampleInput,
+      lesson_id: exLessonId || undefined,
+      course_id: matchedLesson?.course_id || editingExercise.course_id,
+      hints: exHint.trim() ? [exHint.trim()] : [],
+      solution_explanation: exSolution.trim() || undefined,
+      solution_code: exSolutionCode.trim() || undefined,
+      xp_reward: exXpReward >= 0 ? exXpReward : 75,
+    })
+
+    if (ok) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'UPDATE_CHALLENGE', 'challenge', editingExercise.id, { title: exTitle })
+      }
+      setExerciseAlert('Coding exercise successfully updated!')
+      setEditingExercise(null)
+      await loadAdminChallenges()
       setTimeout(() => setExerciseAlert(null), 4000)
     }
   }
 
   const handleTogglePublishExercise = async (ch: Challenge) => {
     await updateAdminChallenge(ch.id, { is_published: !ch.is_published })
-    loadAdminChallenges()
+    if (user?.id) {
+      await logAdminAction(user.id, 'TOGGLE_PUBLISH_CHALLENGE', 'challenge', ch.id, { is_published: !ch.is_published })
+    }
+    await loadAdminChallenges()
+  }
+
+  const handleMoveChallenge = async (challengeId: string, direction: 'up' | 'down') => {
+    const index = adminChallenges.findIndex((c) => c.id === challengeId)
+    if (index < 0) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= adminChallenges.length) return
+
+    const reordered = [...adminChallenges]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    const payload = reordered.map((item, idx) => ({ id: item.id, order_index: idx + 1 }))
+    await reorderChallenges(payload)
+    await loadAdminChallenges()
   }
 
   const handleDeleteExercise = async (id: string) => {
     if (confirm('Delete this coding exercise from the realm?')) {
       await deleteAdminChallenge(id)
-      loadAdminChallenges()
+      if (user?.id) {
+        await logAdminAction(user.id, 'DELETE_CHALLENGE', 'challenge', id)
+      }
+      await loadAdminChallenges()
+      if (selectedExerciseForTests?.id === id) {
+        setSelectedExerciseForTests(null)
+      }
     }
   }
 
   const handleOpenTestCases = async (ch: Challenge) => {
     setSelectedExerciseForTests(ch)
+    setEditingTestCase(null)
+    setTcInput('')
+    setTcExpectedOutput('')
+    setTcIsHidden(false)
+    setTcIsActive(true)
     await loadTestCasesForSelected(ch.id)
   }
 
@@ -377,13 +615,71 @@ export const AdminDashboard: React.FC = () => {
       input: tcInput,
       expected_output: tcExpectedOutput,
       is_hidden: tcIsHidden,
+      is_active: tcIsActive,
       order_index: exerciseTestCases.length + 1,
-      is_active: true,
     })
 
     setTcInput('')
     setTcExpectedOutput('')
     setTcIsHidden(false)
+    setTcIsActive(true)
+    await loadTestCasesForSelected(selectedExerciseForTests.id)
+  }
+
+  const handleStartEditTestCase = (tc: ExerciseTestCase) => {
+    setEditingTestCase(tc)
+    setTcInput(tc.input || '')
+    setTcExpectedOutput(tc.expected_output || '')
+    setTcIsHidden(tc.is_hidden)
+    setTcIsActive(tc.is_active)
+  }
+
+  const handleUpdateTestCase = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingTestCase || !tcExpectedOutput.trim() || !selectedExerciseForTests) return
+
+    await updateAdminTestCase(editingTestCase.id, {
+      input: tcInput,
+      expected_output: tcExpectedOutput,
+      is_hidden: tcIsHidden,
+      is_active: tcIsActive,
+    })
+
+    setEditingTestCase(null)
+    setTcInput('')
+    setTcExpectedOutput('')
+    setTcIsHidden(false)
+    setTcIsActive(true)
+    await loadTestCasesForSelected(selectedExerciseForTests.id)
+  }
+
+  const handleToggleTestCaseHidden = async (tc: ExerciseTestCase) => {
+    await updateAdminTestCase(tc.id, { is_hidden: !tc.is_hidden })
+    if (selectedExerciseForTests) {
+      await loadTestCasesForSelected(selectedExerciseForTests.id)
+    }
+  }
+
+  const handleToggleTestCaseActive = async (tc: ExerciseTestCase) => {
+    await updateAdminTestCase(tc.id, { is_active: !tc.is_active })
+    if (selectedExerciseForTests) {
+      await loadTestCasesForSelected(selectedExerciseForTests.id)
+    }
+  }
+
+  const handleMoveTestCase = async (tcId: string, direction: 'up' | 'down') => {
+    if (!selectedExerciseForTests) return
+    const index = exerciseTestCases.findIndex((t) => t.id === tcId)
+    if (index < 0) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= exerciseTestCases.length) return
+
+    const reordered = [...exerciseTestCases]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    const payload = reordered.map((item, idx) => ({ id: item.id, order_index: idx + 1 }))
+    await reorderTestCases(payload)
     await loadTestCasesForSelected(selectedExerciseForTests.id)
   }
 
@@ -393,13 +689,6 @@ export const AdminDashboard: React.FC = () => {
       if (selectedExerciseForTests) {
         await loadTestCasesForSelected(selectedExerciseForTests.id)
       }
-    }
-  }
-
-  const handleToggleTestCaseHidden = async (tc: ExerciseTestCase) => {
-    await updateAdminTestCase(tc.id, { is_hidden: !tc.is_hidden })
-    if (selectedExerciseForTests) {
-      await loadTestCasesForSelected(selectedExerciseForTests.id)
     }
   }
 
@@ -473,6 +762,210 @@ export const AdminDashboard: React.FC = () => {
     await loadAdminAnalyticsAndLogs()
   }
 
+  // ----------------------------------------------------
+  // LANGUAGES HANDLERS
+  // ----------------------------------------------------
+  const handleCreateLanguage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!langName.trim()) return
+
+    const slug = langSlug.trim() || langName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const created = await createLanguage({
+      name: langName.trim(),
+      slug,
+      icon: langIcon.trim() || '🐍',
+      color: langColor.trim() || '#10b981',
+      description: langDesc.trim() || undefined,
+      order_index: adminLanguages.length + 1,
+      is_published: true,
+    })
+
+    if (created) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'CREATE_LANGUAGE', 'language', created.id, { name: langName })
+      }
+      setLangName('')
+      setLangSlug('')
+      setLangDesc('')
+      setShowAddLanguage(false)
+      await loadAdminLanguages()
+      await loadAdminAnalyticsAndLogs()
+    }
+  }
+
+  const handleEditLanguage = (lang: Language) => {
+    setEditingLanguage(lang)
+    setLangName(lang.name)
+    setLangSlug(lang.slug)
+    setLangIcon(lang.icon || '🐍')
+    setLangColor(lang.color || '#10b981')
+    setLangDesc(lang.description || '')
+  }
+
+  const handleUpdateLanguage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingLanguage || !langName.trim()) return
+
+    const ok = await updateLanguage(editingLanguage.id, {
+      name: langName.trim(),
+      slug: langSlug.trim() || editingLanguage.slug,
+      icon: langIcon.trim() || '🐍',
+      color: langColor.trim() || '#10b981',
+      description: langDesc.trim() || undefined,
+    })
+
+    if (ok) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'UPDATE_LANGUAGE', 'language', editingLanguage.id, { name: langName })
+      }
+      setEditingLanguage(null)
+      setLangName('')
+      setLangSlug('')
+      setLangDesc('')
+      await loadAdminLanguages()
+    }
+  }
+
+  const handleTogglePublishLanguage = async (lang: Language) => {
+    const next = !lang.is_published
+    await updateLanguage(lang.id, { is_published: next })
+    if (user?.id) {
+      await logAdminAction(user.id, 'TOGGLE_PUBLISH_LANGUAGE', 'language', lang.id, { is_published: next })
+    }
+    await loadAdminLanguages()
+  }
+
+  const handleMoveLanguage = async (langId: string, direction: 'up' | 'down') => {
+    const index = adminLanguages.findIndex((l) => l.id === langId)
+    if (index < 0) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= adminLanguages.length) return
+
+    const reordered = [...adminLanguages]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    const payload = reordered.map((item, idx) => ({ id: item.id, order_index: idx + 1 }))
+    await reorderLanguages(payload)
+    await loadAdminLanguages()
+  }
+
+  const handleDeleteLanguage = async (langId: string) => {
+    await deleteLanguage(langId)
+    if (user?.id) {
+      await logAdminAction(user.id, 'DELETE_LANGUAGE', 'language', langId)
+    }
+    await loadAdminLanguages()
+    await loadAdminAnalyticsAndLogs()
+  }
+
+  // ----------------------------------------------------
+  // LEARNING PATHS / ISLANDS HANDLERS
+  // ----------------------------------------------------
+  const handleCreatePath = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pathTitle.trim()) return
+
+    const slug = pathSlug.trim() || pathTitle.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const ok = await createAdminLearningPath({
+      title: pathTitle.trim(),
+      slug,
+      island_name: pathIslandName.trim() || pathTitle.trim(),
+      icon: pathIcon.trim() || '🏝️',
+      language_id: pathLanguageId || undefined,
+      description: pathDesc.trim() || undefined,
+      order_index: adminPaths.length + 1,
+      is_published: true,
+    })
+
+    if (ok) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'CREATE_LEARNING_PATH', 'learning_path', undefined, { title: pathTitle })
+      }
+      setPathTitle('')
+      setPathSlug('')
+      setPathIslandName('')
+      setPathDesc('')
+      setPathLanguageId('')
+      setShowAddPath(false)
+      await loadAdminPaths()
+      await loadAdminAnalyticsAndLogs()
+    }
+  }
+
+  const handleEditPath = (p: LearningPath) => {
+    setEditingPath(p)
+    setPathTitle(p.title)
+    setPathSlug(p.slug)
+    setPathIslandName(p.island_name || p.title)
+    setPathIcon(p.icon || '🏝️')
+    setPathLanguageId(p.language_id || '')
+    setPathDesc(p.description || '')
+  }
+
+  const handleUpdatePath = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingPath || !pathTitle.trim()) return
+
+    const ok = await updateAdminLearningPath(editingPath.id, {
+      title: pathTitle.trim(),
+      slug: pathSlug.trim() || editingPath.slug,
+      island_name: pathIslandName.trim() || pathTitle.trim(),
+      icon: pathIcon.trim() || '🏝️',
+      language_id: pathLanguageId || undefined,
+      description: pathDesc.trim() || undefined,
+    })
+
+    if (ok) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'UPDATE_LEARNING_PATH', 'learning_path', editingPath.id, { title: pathTitle })
+      }
+      setEditingPath(null)
+      setPathTitle('')
+      setPathSlug('')
+      setPathIslandName('')
+      setPathDesc('')
+      setPathLanguageId('')
+      await loadAdminPaths()
+    }
+  }
+
+  const handleTogglePublishPath = async (p: LearningPath) => {
+    const next = !p.is_published
+    await updateAdminLearningPath(p.id, { is_published: next })
+    if (user?.id) {
+      await logAdminAction(user.id, 'TOGGLE_PUBLISH_LEARNING_PATH', 'learning_path', p.id, { is_published: next })
+    }
+    await loadAdminPaths()
+  }
+
+  const handleMovePath = async (pathId: string, direction: 'up' | 'down') => {
+    const index = adminPaths.findIndex((p) => p.id === pathId)
+    if (index < 0) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= adminPaths.length) return
+
+    const reordered = [...adminPaths]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    const payload = reordered.map((item, idx) => ({ id: item.id, order_index: idx + 1 }))
+    await reorderLearningPaths(payload)
+    await loadAdminPaths()
+  }
+
+  const handleDeletePath = async (pathId: string) => {
+    await deleteAdminLearningPath(pathId)
+    if (user?.id) {
+      await logAdminAction(user.id, 'DELETE_LEARNING_PATH', 'learning_path', pathId)
+    }
+    await loadAdminPaths()
+    await loadAdminAnalyticsAndLogs()
+  }
+
+  // ----------------------------------------------------
+  // COURSES HANDLERS
+  // ----------------------------------------------------
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!courseTitle.trim()) return
@@ -484,6 +977,9 @@ export const AdminDashboard: React.FC = () => {
       track: courseTrack,
       difficulty: courseDifficulty,
       description: courseDesc.trim() || undefined,
+      language_id: courseLanguageId || undefined,
+      path_id: coursePathId || undefined,
+      prerequisite_course_id: coursePrereqId || null,
       is_published: true,
       order_index: adminCourses.length + 1,
     })
@@ -495,10 +991,70 @@ export const AdminDashboard: React.FC = () => {
       setCourseTitle('')
       setCourseSlug('')
       setCourseDesc('')
+      setCourseLanguageId('')
+      setCoursePathId('')
+      setCoursePrereqId('')
       setShowAddCourse(false)
       await loadAdminCourses()
       await loadAdminAnalyticsAndLogs()
     }
+  }
+
+  const handleEditCourse = (cSummary: CourseProgressSummary) => {
+    setEditingCourse(cSummary)
+    setCourseTitle(cSummary.course.title)
+    setCourseSlug(cSummary.course.slug)
+    setCourseTrack(cSummary.course.track)
+    setCourseDifficulty(cSummary.course.difficulty)
+    setCourseLanguageId(cSummary.course.language_id || '')
+    setCoursePathId(cSummary.course.path_id || '')
+    setCoursePrereqId(cSummary.course.prerequisite_course_id || '')
+    setCourseDesc(cSummary.course.description || '')
+  }
+
+  const handleUpdateCourse = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCourse || !courseTitle.trim()) return
+
+    const ok = await updateAdminCourse(editingCourse.course.id, {
+      title: courseTitle.trim(),
+      slug: courseSlug.trim() || editingCourse.course.slug,
+      track: courseTrack,
+      difficulty: courseDifficulty,
+      language_id: courseLanguageId || undefined,
+      path_id: coursePathId || undefined,
+      prerequisite_course_id: coursePrereqId || null,
+      description: courseDesc.trim() || undefined,
+    })
+
+    if (ok) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'UPDATE_COURSE', 'course', editingCourse.course.id, { title: courseTitle })
+      }
+      setEditingCourse(null)
+      setCourseTitle('')
+      setCourseSlug('')
+      setCourseDesc('')
+      setCourseLanguageId('')
+      setCoursePathId('')
+      setCoursePrereqId('')
+      await loadAdminCourses()
+    }
+  }
+
+  const handleMoveCourse = async (courseId: string, direction: 'up' | 'down') => {
+    const index = adminCourses.findIndex((c) => c.course.id === courseId)
+    if (index < 0) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= adminCourses.length) return
+
+    const reordered = [...adminCourses]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    const payload = reordered.map((item, idx) => ({ id: item.course.id, order_index: idx + 1 }))
+    await reorderCourses(payload)
+    await loadAdminCourses()
   }
 
   const handleTogglePublishCourse = async (courseSummary: CourseProgressSummary) => {
@@ -520,6 +1076,9 @@ export const AdminDashboard: React.FC = () => {
     await loadAdminAnalyticsAndLogs()
   }
 
+  // ----------------------------------------------------
+  // CHAPTERS HANDLERS
+  // ----------------------------------------------------
   const handleCreateChapter = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedCourseForCurriculum || !newChapterTitle.trim()) return
@@ -543,6 +1102,36 @@ export const AdminDashboard: React.FC = () => {
     }
   }
 
+  const handleUpdateChapter = async (chapterId: string, title: string) => {
+    if (!title.trim() || !selectedCourseForCurriculum) return
+    await updateAdminChapter(chapterId, { title: title.trim() })
+    setEditingChapter(null)
+    await loadAdminCourses()
+    const refreshedCourses = await fetchCoursesWithProgress(undefined, undefined)
+    const updated = refreshedCourses.find((c) => c.course.id === selectedCourseForCurriculum.course.id)
+    if (updated) setSelectedCourseForCurriculum(updated)
+  }
+
+  const handleMoveChapter = async (chapterId: string, direction: 'up' | 'down') => {
+    if (!selectedCourseForCurriculum) return
+    const chaps = selectedCourseForCurriculum.chapters || []
+    const index = chaps.findIndex((c) => c.id === chapterId)
+    if (index < 0) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= chaps.length) return
+
+    const reordered = [...chaps]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    const payload = reordered.map((item, idx) => ({ id: item.id, order_index: idx + 1 }))
+    await reorderChapters(payload)
+    await loadAdminCourses()
+    const refreshedCourses = await fetchCoursesWithProgress(undefined, undefined)
+    const updated = refreshedCourses.find((c) => c.course.id === selectedCourseForCurriculum.course.id)
+    if (updated) setSelectedCourseForCurriculum(updated)
+  }
+
   const handleDeleteChapter = async (chapterId: string) => {
     await deleteAdminChapter(chapterId)
     if (user?.id) {
@@ -557,9 +1146,15 @@ export const AdminDashboard: React.FC = () => {
     }
   }
 
+  // ----------------------------------------------------
+  // LESSONS HANDLERS
+  // ----------------------------------------------------
   const handleCreateLesson = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedChapterIdForLesson || !newLessonTitle.trim()) return
+    if (!selectedChapterIdForLesson || !newLessonTitle.trim() || !selectedCourseForCurriculum) return
+
+    const currentChapter = (selectedCourseForCurriculum.chapters || []).find((c) => c.id === selectedChapterIdForLesson)
+    const lessonCount = currentChapter?.lessons?.length || 0
 
     const slug = newLessonSlug.trim() || newLessonTitle.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     const newLes = await createAdminLesson({
@@ -568,25 +1163,86 @@ export const AdminDashboard: React.FC = () => {
       slug,
       summary: newLessonSummary.trim() || undefined,
       content: newLessonContent.trim() || undefined,
+      order_index: lessonCount + 1,
     })
 
     if (newLes) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'CREATE_LESSON', 'lesson', newLes.id, { title: newLessonTitle })
+      }
       setNewLessonTitle('')
       setNewLessonSlug('')
       setNewLessonSummary('')
-      setNewLessonContent('')
+      setNewLessonContent(DEFAULT_LESSON_CONTENT_TEMPLATE)
       setSelectedChapterIdForLesson(null)
       await loadAdminCourses()
-      if (selectedCourseForCurriculum) {
-        const refreshedCourses = await fetchCoursesWithProgress(undefined, undefined)
-        const updated = refreshedCourses.find((c) => c.course.id === selectedCourseForCurriculum.course.id)
-        if (updated) setSelectedCourseForCurriculum(updated)
-      }
+      const refreshedCourses = await fetchCoursesWithProgress(undefined, undefined)
+      const updated = refreshedCourses.find((c) => c.course.id === selectedCourseForCurriculum.course.id)
+      if (updated) setSelectedCourseForCurriculum(updated)
     }
+  }
+
+  const handleEditLesson = (les: any, chapterId: string) => {
+    setEditingLesson({
+      id: les.id,
+      chapterId,
+      title: les.title,
+      slug: les.slug,
+      summary: les.summary || '',
+      content: les.content || DEFAULT_LESSON_CONTENT_TEMPLATE,
+    })
+  }
+
+  const handleUpdateLesson = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingLesson || !editingLesson.title.trim() || !selectedCourseForCurriculum) return
+
+    const ok = await updateAdminLesson(editingLesson.id, {
+      title: editingLesson.title.trim(),
+      slug: editingLesson.slug.trim(),
+      summary: editingLesson.summary.trim() || undefined,
+      content: editingLesson.content.trim() || undefined,
+    })
+
+    if (ok) {
+      if (user?.id) {
+        await logAdminAction(user.id, 'UPDATE_LESSON', 'lesson', editingLesson.id, { title: editingLesson.title })
+      }
+      setEditingLesson(null)
+      await loadAdminCourses()
+      const refreshedCourses = await fetchCoursesWithProgress(undefined, undefined)
+      const updated = refreshedCourses.find((c) => c.course.id === selectedCourseForCurriculum.course.id)
+      if (updated) setSelectedCourseForCurriculum(updated)
+    }
+  }
+
+  const handleMoveLesson = async (chapterId: string, lessonId: string, direction: 'up' | 'down') => {
+    if (!selectedCourseForCurriculum) return
+    const currentChapter = (selectedCourseForCurriculum.chapters || []).find((c) => c.id === chapterId)
+    if (!currentChapter) return
+    const lessons = currentChapter.lessons || []
+    const index = lessons.findIndex((l) => l.id === lessonId)
+    if (index < 0) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= lessons.length) return
+
+    const reordered = [...lessons]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    const payload = reordered.map((item, idx) => ({ id: item.id, order_index: idx + 1 }))
+    await reorderLessons(payload)
+    await loadAdminCourses()
+    const refreshedCourses = await fetchCoursesWithProgress(undefined, undefined)
+    const updated = refreshedCourses.find((c) => c.course.id === selectedCourseForCurriculum.course.id)
+    if (updated) setSelectedCourseForCurriculum(updated)
   }
 
   const handleDeleteLesson = async (lessonId: string) => {
     await deleteAdminLesson(lessonId)
+    if (user?.id) {
+      await logAdminAction(user.id, 'DELETE_LESSON', 'lesson', lessonId)
+    }
     await loadAdminCourses()
     if (selectedCourseForCurriculum) {
       const refreshedCourses = await fetchCoursesWithProgress(undefined, undefined)
@@ -665,17 +1321,25 @@ export const AdminDashboard: React.FC = () => {
       {/* Test Case Manager Modal */}
       {selectedExerciseForTests && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs text-left animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ListChecks className="w-5 h-5 text-purple-600" />
-                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
-                  Test Case Manager: {selectedExerciseForTests.title}
-                </h3>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                    Test Case Builder: {selectedExerciseForTests.title}
+                  </h3>
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    Language: <span className="uppercase text-purple-700 font-bold">{selectedExerciseForTests.language || selectedExerciseForTests.category}</span> • XP: {selectedExerciseForTests.xp_reward ?? 75} XP • {exerciseTestCases.length} Test Cases Total
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedExerciseForTests(null)}
+                onClick={() => {
+                  setSelectedExerciseForTests(null)
+                  setEditingTestCase(null)
+                }}
                 className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -685,12 +1349,17 @@ export const AdminDashboard: React.FC = () => {
             <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
               {/* Existing Test Cases Table */}
               <div>
-                <h4 className="text-xs font-bold font-pixel uppercase text-slate-800 mb-3">
-                  Configured Test Cases ({exerciseTestCases.length})
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold font-pixel uppercase text-slate-800">
+                    Challenge Validation Suite ({exerciseTestCases.length} Cases)
+                  </h4>
+                  <span className="text-[10px] text-slate-400">
+                    Public cases give immediate feedback; Hidden cases validate edge cases securely.
+                  </span>
+                </div>
                 {exerciseTestCases.length === 0 ? (
                   <div className="p-6 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 font-pixel text-xs">
-                    NO TEST CASES CONFIGURED YET
+                    NO TEST CASES CONFIGURED YET. ADD AT LEAST ONE TEST CASE BELOW.
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
@@ -701,33 +1370,72 @@ export const AdminDashboard: React.FC = () => {
                           <th className="p-3">INPUT (STDIN)</th>
                           <th className="p-3">EXPECTED OUTPUT</th>
                           <th className="p-3">VISIBILITY</th>
+                          <th className="p-3">STATE</th>
+                          <th className="p-3">ORDER</th>
                           <th className="p-3 text-right">ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {exerciseTestCases.map((tc, idx) => (
-                          <tr key={tc.id} className="border-b border-slate-100 last:border-0 font-mono">
-                            <td className="p-3 font-bold">{idx + 1}</td>
-                            <td className="p-3 text-slate-600 truncate max-w-32">{tc.input || '(empty)'}</td>
-                            <td className="p-3 text-emerald-700 font-bold truncate max-w-48">{tc.expected_output}</td>
+                          <tr key={tc.id} className="border-b border-slate-100 last:border-0 font-mono hover:bg-slate-50/50">
+                            <td className="p-3 font-bold">{tc.order_index ?? idx + 1}</td>
+                            <td className="p-3 text-slate-600 truncate max-w-36 font-mono">{tc.input ? tc.input : <span className="text-slate-300 italic">(none)</span>}</td>
+                            <td className="p-3 text-emerald-700 font-bold truncate max-w-48 font-mono">{tc.expected_output}</td>
                             <td className="p-3">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[9px] font-pixel font-bold uppercase ${
-                                  tc.is_hidden ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTestCaseHidden(tc)}
+                                className={`px-2 py-0.5 rounded text-[9px] font-pixel font-bold uppercase cursor-pointer transition-colors ${
+                                  tc.is_hidden ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
                                 }`}
+                                title="Click to toggle Public / Hidden"
                               >
-                                {tc.is_hidden ? 'Hidden' : 'Public'}
-                              </span>
+                                {tc.is_hidden ? '🔒 Hidden' : '👁️ Public'}
+                              </button>
                             </td>
-                            <td className="p-3 text-right">
-                              <div className="flex items-center justify-end gap-2">
+                            <td className="p-3">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTestCaseActive(tc)}
+                                className={`px-2 py-0.5 rounded text-[9px] font-pixel font-bold uppercase cursor-pointer transition-colors ${
+                                  tc.is_active ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                                title="Click to toggle Active / Inactive"
+                              >
+                                {tc.is_active ? 'Active' : 'Disabled'}
+                              </button>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleTestCaseHidden(tc)}
-                                  className="p-1 rounded text-slate-500 hover:bg-slate-100 cursor-pointer"
-                                  title={tc.is_hidden ? 'Make Public' : 'Make Hidden'}
+                                  onClick={() => handleMoveTestCase(tc.id, 'up')}
+                                  disabled={idx === 0}
+                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-30 cursor-pointer"
+                                  title="Move Up"
                                 >
-                                  {tc.is_hidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                  <ArrowUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveTestCase(tc.id, 'down')}
+                                  disabled={idx === exerciseTestCases.length - 1}
+                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-30 cursor-pointer"
+                                  title="Move Down"
+                                >
+                                  <ArrowDown className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </td>
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditTestCase(tc)}
+                                  className="p-1 rounded text-blue-600 hover:bg-blue-50 cursor-pointer"
+                                  title="Edit Test Case"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   type="button"
@@ -747,52 +1455,288 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* Add Test Case Form */}
-              <form onSubmit={handleAddTestCase} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-4">
-                <h4 className="text-xs font-bold font-pixel uppercase text-slate-900">Add New Test Case</h4>
+              {/* Add / Edit Test Case Form */}
+              <form
+                onSubmit={editingTestCase ? handleUpdateTestCase : handleAddTestCase}
+                className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold font-pixel uppercase text-slate-900">
+                    {editingTestCase ? `Edit Test Case (#${editingTestCase.order_index})` : 'Add New Test Case'}
+                  </h4>
+                  {editingTestCase && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTestCase(null)
+                        setTcInput('')
+                        setTcExpectedOutput('')
+                        setTcIsHidden(false)
+                        setTcIsActive(true)
+                      }}
+                      className="text-[10px] font-pixel text-slate-500 hover:text-slate-800 cursor-pointer"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Input / STDIN (Optional)</label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                      Input / STDIN (Passed to execution script)
+                    </label>
                     <textarea
                       rows={2}
                       value={tcInput}
                       onChange={(e) => setTcInput(e.target.value)}
-                      placeholder="e.g. sample arguments or input"
+                      placeholder="e.g. 5 or [1, 2, 3] (leave blank if input is embedded in starter code)"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Expected Output (Exact Match)</label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                      Expected Output (Exact stdout string match)
+                    </label>
                     <textarea
                       required
                       rows={2}
                       value={tcExpectedOutput}
                       onChange={(e) => setTcExpectedOutput(e.target.value)}
-                      placeholder="e.g. expected stdout string"
+                      placeholder="e.g. 25 or Hello World"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={tcIsHidden}
-                      onChange={(e) => setTcIsHidden(e.target.checked)}
-                      className="rounded"
-                    />
-                    <span>Hidden Test Case (Output obscured from student)</span>
-                  </label>
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
+                  <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={tcIsHidden}
+                        onChange={(e) => setTcIsHidden(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>🔒 Hidden Test Case (Output obscured from student)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={tcIsActive}
+                        onChange={(e) => setTcIsActive(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Active Test Case</span>
+                    </label>
+                  </div>
                   <button
                     type="submit"
                     className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold font-pixel uppercase cursor-pointer"
                   >
-                    + Add Test Case
+                    {editingTestCase ? 'Save Test Case Changes' : '+ Add Test Case'}
                   </button>
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coding Challenge Editor Modal */}
+      {editingExercise && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs text-left animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Code2 className="w-5 h-5 text-purple-600" />
+                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                  Edit Coding Challenge: {editingExercise.title}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenTestCases(editingExercise)}
+                  className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs font-bold font-pixel uppercase flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ListChecks className="w-3.5 h-3.5" />
+                  <span>Test Cases ({exerciseTestCases.filter((t) => t.exercise_id === editingExercise.id).length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingExercise(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateExercise} className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Challenge Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={exTitle}
+                    onChange={(e) => setExTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
+                  <input
+                    type="text"
+                    value={exSlug}
+                    onChange={(e) => setExSlug(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Language</label>
+                  <select
+                    value={exLanguage}
+                    onChange={(e) => setExLanguage(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                  >
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                    <option value="cpp">C++</option>
+                    <option value="java">Java</option>
+                    <option value="html">HTML / Web Preview</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Difficulty</label>
+                  <select
+                    value={exDifficulty}
+                    onChange={(e) => setExDifficulty(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                  >
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">XP Reward</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1000"
+                    value={exXpReward}
+                    onChange={(e) => setExXpReward(parseInt(e.target.value, 10) || 0)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-amber-600 focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Linked Lesson</label>
+                  <select
+                    value={exLessonId}
+                    onChange={(e) => setExLessonId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                  >
+                    <option value="">-- Standalone Challenge --</option>
+                    {adminLessons.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.course_title ? `${l.course_title} > ${l.title}` : l.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Instructions / Challenge Goal</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={exInstructions}
+                  onChange={(e) => setExInstructions(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Starter Code (Editor Seed)</label>
+                <textarea
+                  rows={5}
+                  value={exStarterCode}
+                  onChange={(e) => setExStarterCode(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-900 text-slate-100 font-mono text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Hint (Optional)</label>
+                  <input
+                    type="text"
+                    value={exHint}
+                    onChange={(e) => setExHint(e.target.value)}
+                    placeholder="e.g. Try using string interpolation"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Sample Input / STDIN</label>
+                  <input
+                    type="text"
+                    value={exSampleInput}
+                    onChange={(e) => setExSampleInput(e.target.value)}
+                    placeholder="e.g. [1, 2, 3]"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Solution Code (Secure)</label>
+                  <textarea
+                    rows={3}
+                    value={exSolutionCode}
+                    onChange={(e) => setExSolutionCode(e.target.value)}
+                    placeholder="// Reference solution code"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Solution Explanation</label>
+                  <textarea
+                    rows={3}
+                    value={exSolution}
+                    onChange={(e) => setExSolution(e.target.value)}
+                    placeholder="Explains the optimal approach and concepts"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingExercise(null)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold font-pixel uppercase rounded-xl cursor-pointer"
+                >
+                  Save Challenge Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -921,15 +1865,22 @@ export const AdminDashboard: React.FC = () => {
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
-                  Curriculum Editor: {selectedCourseForCurriculum.course.title}
-                </h3>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                    Curriculum Editor: {selectedCourseForCurriculum.course.title}
+                  </h3>
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    Track: {selectedCourseForCurriculum.course.track} • {selectedCourseForCurriculum.course.difficulty}
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => {
                   setSelectedCourseForCurriculum(null)
                   setSelectedChapterIdForLesson(null)
+                  setEditingChapter(null)
+                  setEditingLesson(null)
                 }}
                 className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
               >
@@ -947,27 +1898,78 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 {(selectedCourseForCurriculum.chapters || []).length === 0 ? (
-                  <div className="p-6 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 font-pixel text-xs">
-                    NO CHAPTERS IN THIS COURSE YET. ADD ONE BELOW!
+                  <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-slate-400 font-pixel text-xs">
+                    NO CHAPTERS IN THIS COURSE YET. ADD YOUR FIRST CHAPTER BELOW!
                   </div>
                 ) : (
-                  (selectedCourseForCurriculum.chapters || []).map((chap) => (
+                  (selectedCourseForCurriculum.chapters || []).map((chap, cIdx) => (
                     <div key={chap.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col gap-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-pixel text-[10px] font-bold">
                             Ch. {chap.order_index}
                           </span>
-                          <span className="font-bold text-sm text-slate-900 font-pixel uppercase">{chap.title}</span>
+                          {editingChapter?.id === chap.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={editingChapter.title}
+                                onChange={(e) => setEditingChapter({ ...editingChapter, title: e.target.value })}
+                                className="px-2 py-1 rounded border border-emerald-300 text-xs font-bold font-pixel"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateChapter(chap.id, editingChapter.title)}
+                                className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold font-pixel uppercase cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingChapter(null)}
+                                className="px-2 py-1 bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="font-bold text-sm text-slate-900 font-pixel uppercase">{chap.title}</span>
+                          )}
                           <span className="text-xs text-slate-400">({chap.lessons?.length || 0} lessons)</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveChapter(chap.id, 'up')}
+                            disabled={cIdx === 0}
+                            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-30 cursor-pointer"
+                            title="Move Chapter Up"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveChapter(chap.id, 'down')}
+                            disabled={cIdx === (selectedCourseForCurriculum.chapters || []).length - 1}
+                            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-30 cursor-pointer"
+                            title="Move Chapter Down"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingChapter({ id: chap.id, title: chap.title })}
+                            className="p-1 rounded text-slate-500 hover:bg-slate-200 cursor-pointer"
+                            title="Edit Chapter Title"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => setSelectedChapterIdForLesson(selectedChapterIdForLesson === chap.id ? null : chap.id)}
                             className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-pixel uppercase font-bold cursor-pointer"
                           >
-                            {selectedChapterIdForLesson === chap.id ? 'Cancel' : '+ Add Lesson'}
+                            {selectedChapterIdForLesson === chap.id ? 'Close' : '+ Add Lesson'}
                           </button>
                           <button
                             type="button"
@@ -983,65 +1985,162 @@ export const AdminDashboard: React.FC = () => {
                       {/* Lessons inside Chapter */}
                       {(chap.lessons || []).length > 0 && (
                         <div className="pl-4 border-l-2 border-slate-200 flex flex-col gap-1.5">
-                          {(chap.lessons || []).map((les, lIdx) => (
-                            <div key={les.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-100 text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-slate-400 font-mono">{lIdx + 1}.</span>
-                                <span className="font-bold text-slate-800">{les.title}</span>
-                                <span className="text-[10px] text-slate-400 font-mono">/{les.slug}</span>
+                          {(chap.lessons || []).map((les, lIdx) => {
+                            const linkedChallenge = adminChallenges.find((ch) => ch.lesson_id === les.id)
+                            const linkedTestsCount = linkedChallenge ? exerciseTestCases.filter((t) => t.exercise_id === linkedChallenge.id).length : 0
+
+                            return (
+                              <div key={les.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl bg-white border border-slate-100 text-xs hover:border-slate-300 transition-colors gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-slate-400 font-mono text-[10px] font-bold">#{les.order_index ?? lIdx + 1}</span>
+                                  <span className="font-bold text-slate-900">{les.title}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono">/{les.slug}</span>
+                                  {les.summary && (
+                                    <span className="text-[11px] text-slate-500 truncate max-w-48 hidden md:inline">— {les.summary}</span>
+                                  )}
+                                  {linkedChallenge ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenChallengeEditorForLesson(les.id)}
+                                      className="px-2 py-0.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[10px] font-pixel uppercase font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Edit Associated Coding Challenge & Test Cases"
+                                    >
+                                      <Code2 className="w-3 h-3 text-purple-600" />
+                                      <span>Quest: {linkedChallenge.title}</span>
+                                      <span className="text-[9px] px-1 py-0.2 bg-purple-200 text-purple-900 rounded font-mono">{linkedChallenge.language || 'code'}</span>
+                                      <span className="text-[9px] px-1 py-0.2 bg-purple-300/60 text-purple-950 rounded font-bold">+{linkedChallenge.xp_reward ?? 75} XP</span>
+                                      <span className="text-[9px] px-1 py-0.2 bg-purple-200/50 text-purple-800 rounded font-bold">{linkedTestsCount} tests</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenChallengeEditorForLesson(les.id)}
+                                      className="px-2 py-0.5 rounded-lg border border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 text-[10px] font-pixel uppercase font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Link a new Coding Challenge to this Lesson"
+                                    >
+                                      <PlusCircle className="w-3 h-3" />
+                                      <span>+ Attach Challenge</span>
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 self-end sm:self-auto">
+                                  {linkedChallenge && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenTestCases(linkedChallenge)}
+                                      className="px-2 py-1 rounded bg-slate-100 hover:bg-purple-100 text-purple-700 font-pixel text-[9px] uppercase font-bold flex items-center gap-1 cursor-pointer"
+                                      title="Manage Test Cases for this Challenge"
+                                    >
+                                      <ListChecks className="w-3 h-3" />
+                                      <span>Tests</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveLesson(chap.id, les.id, 'up')}
+                                    disabled={lIdx === 0}
+                                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                                    title="Move Lesson Up"
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveLesson(chap.id, les.id, 'down')}
+                                    disabled={lIdx === (chap.lessons || []).length - 1}
+                                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                                    title="Move Lesson Down"
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditLesson(les, chap.id)}
+                                    className="p-1 rounded text-blue-600 hover:bg-blue-50 cursor-pointer"
+                                    title="Edit Lesson Content"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLesson(les.id)}
+                                    className="p-1 rounded text-slate-400 hover:text-rose-600 cursor-pointer"
+                                    title="Delete Lesson"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteLesson(les.id)}
-                                className="p-1 rounded text-slate-400 hover:text-rose-600 cursor-pointer"
-                                title="Delete Lesson"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       )}
 
                       {/* Add Lesson Form inside Chapter */}
                       {selectedChapterIdForLesson === chap.id && (
-                        <form onSubmit={handleCreateLesson} className="p-3 bg-white rounded-xl border border-emerald-200 flex flex-col gap-2 mt-1">
-                          <h6 className="text-[10px] font-pixel font-bold uppercase text-emerald-800">Add New Lesson to {chap.title}</h6>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <form onSubmit={handleCreateLesson} className="p-4 bg-white rounded-2xl border border-emerald-300 shadow-sm flex flex-col gap-3 mt-1 animate-in fade-in duration-150">
+                          <div className="flex items-center justify-between">
+                            <h6 className="text-[10px] font-pixel font-bold uppercase text-emerald-800 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Create Lesson under {chap.title}</span>
+                            </h6>
+                            <span className="text-[10px] text-slate-400">Structured Markdown Template Loaded</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Lesson Title</label>
+                              <input
+                                type="text"
+                                required
+                                value={newLessonTitle}
+                                onChange={(e) => setNewLessonTitle(e.target.value)}
+                                placeholder="e.g. 01. Print Statements & Standard Output"
+                                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Slug (URL identifier)</label>
+                              <input
+                                type="text"
+                                value={newLessonSlug}
+                                onChange={(e) => setNewLessonSlug(e.target.value)}
+                                placeholder="print-statements"
+                                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Summary (1-2 sentences)</label>
                             <input
                               type="text"
-                              required
-                              value={newLessonTitle}
-                              onChange={(e) => setNewLessonTitle(e.target.value)}
-                              placeholder="Lesson Title (e.g. Variables & Types)"
-                              className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
-                            />
-                            <input
-                              type="text"
-                              value={newLessonSlug}
-                              onChange={(e) => setNewLessonSlug(e.target.value)}
-                              placeholder="Slug (optional, auto-generated)"
-                              className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                              value={newLessonSummary}
+                              onChange={(e) => setNewLessonSummary(e.target.value)}
+                              placeholder="Brief description of what student achieves in this lesson..."
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
                             />
                           </div>
-                          <input
-                            type="text"
-                            value={newLessonSummary}
-                            onChange={(e) => setNewLessonSummary(e.target.value)}
-                            placeholder="Summary description"
-                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
-                          />
-                          <textarea
-                            rows={2}
-                            value={newLessonContent}
-                            onChange={(e) => setNewLessonContent(e.target.value)}
-                            placeholder="Lesson markdown content / instructions..."
-                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
-                          />
-                          <div className="flex justify-end">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                              Educational Lesson Content (Markdown with Explanation, Examples, Instructions, Hint, Solution)
+                            </label>
+                            <textarea
+                              rows={8}
+                              value={newLessonContent}
+                              onChange={(e) => setNewLessonContent(e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs text-slate-800 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none leading-relaxed"
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedChapterIdForLesson(null)}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                            >
+                              Cancel
+                            </button>
                             <button
                               type="submit"
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-pixel uppercase font-bold cursor-pointer"
+                              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
                             >
                               Save Lesson
                             </button>
@@ -1062,7 +2161,7 @@ export const AdminDashboard: React.FC = () => {
                     required
                     value={newChapterTitle}
                     onChange={(e) => setNewChapterTitle(e.target.value)}
-                    placeholder="Chapter Title (e.g. Advanced Functions & Closures)"
+                    placeholder="Chapter Title (e.g. Chapter 3: Functions & Control Flow)"
                     className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium"
                   />
                   <button
@@ -1074,6 +2173,425 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Lesson Full Content Modal */}
+      {editingLesson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs text-left animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                  Edit Lesson: {editingLesson.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingLesson(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateLesson} className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingLesson.title}
+                    onChange={(e) => setEditingLesson({ ...editingLesson, title: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Slug</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingLesson.slug}
+                    onChange={(e) => setEditingLesson({ ...editingLesson, slug: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Summary</label>
+                <input
+                  type="text"
+                  value={editingLesson.summary}
+                  onChange={(e) => setEditingLesson({ ...editingLesson, summary: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                  Lesson Markdown Content (Explanation, Examples, Instructions, Hint, Solution)
+                </label>
+                <textarea
+                  rows={12}
+                  value={editingLesson.content}
+                  onChange={(e) => setEditingLesson({ ...editingLesson, content: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs text-slate-800 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none leading-relaxed"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingLesson(null)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
+                >
+                  Update Lesson
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {editingCourse && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs text-left animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                  Edit Course: {editingCourse.course.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCourse(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCourse} className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Course Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={courseTitle}
+                    onChange={(e) => setCourseTitle(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
+                  <input
+                    type="text"
+                    required
+                    value={courseSlug}
+                    onChange={(e) => setCourseSlug(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Track</label>
+                  <input
+                    type="text"
+                    required
+                    value={courseTrack}
+                    onChange={(e) => setCourseTrack(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Difficulty</label>
+                  <select
+                    value={courseDifficulty}
+                    onChange={(e) => setCourseDifficulty(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  >
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Language Association</label>
+                  <select
+                    value={courseLanguageId}
+                    onChange={(e) => setCourseLanguageId(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  >
+                    <option value="">-- None --</option>
+                    {adminLanguages.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.icon} {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Island / Path Association</label>
+                  <select
+                    value={coursePathId}
+                    onChange={(e) => setCoursePathId(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  >
+                    <option value="">-- None --</option>
+                    {adminPaths.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.icon || '🏝️'} {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Prerequisite Course (Must solve to unlock)</label>
+                  <select
+                    value={coursePrereqId}
+                    onChange={(e) => setCoursePrereqId(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  >
+                    <option value="">-- No Prerequisite (Freely Unlocked) --</option>
+                    {adminCourses
+                      .filter((c) => c.course.id !== editingCourse.course.id)
+                      .map((c) => (
+                        <option key={c.course.id} value={c.course.id}>
+                          {c.course.title} ({c.course.track})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  value={courseDesc}
+                  onChange={(e) => setCourseDesc(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingCourse(null)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
+                >
+                  Save Course Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Language Modal */}
+      {editingLanguage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs text-left animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Globe className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                  Edit Language: {editingLanguage.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingLanguage(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateLanguage} className="p-6 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Language Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={langName}
+                    onChange={(e) => setLangName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
+                  <input
+                    type="text"
+                    required
+                    value={langSlug}
+                    onChange={(e) => setLangSlug(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Icon / Emoji</label>
+                  <input
+                    type="text"
+                    value={langIcon}
+                    onChange={(e) => setLangIcon(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Accent Color</label>
+                  <input
+                    type="color"
+                    value={langColor}
+                    onChange={(e) => setLangColor(e.target.value)}
+                    className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={langDesc}
+                  onChange={(e) => setLangDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingLanguage(null)}
+                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
+                >
+                  Save Language
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Island / Path Modal */}
+      {editingPath && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs text-left animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Compass className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-base text-slate-900 font-pixel uppercase">
+                  Edit Learning Path: {editingPath.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPath(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdatePath} className="p-6 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Path Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={pathTitle}
+                    onChange={(e) => setPathTitle(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
+                  <input
+                    type="text"
+                    required
+                    value={pathSlug}
+                    onChange={(e) => setPathSlug(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Island Realm Name</label>
+                  <input
+                    type="text"
+                    value={pathIslandName}
+                    onChange={(e) => setPathIslandName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Icon / Emoji</label>
+                  <input
+                    type="text"
+                    value={pathIcon}
+                    onChange={(e) => setPathIcon(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Linked Language</label>
+                  <select
+                    value={pathLanguageId}
+                    onChange={(e) => setPathLanguageId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  >
+                    <option value="">-- No Language Lock --</option>
+                    {adminLanguages.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.icon} {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={pathDesc}
+                  onChange={(e) => setPathDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingPath(null)}
+                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
+                >
+                  Save Path
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1245,166 +2763,687 @@ export const AdminDashboard: React.FC = () => {
                   Learning Content & Curriculum Studio
                 </h3>
               </div>
-              <p className="text-xs text-slate-500">Manage programming tracks, courses, chapters, and lessons</p>
+              <p className="text-xs text-slate-500">
+                Author & manage Languages, Island Paths, Courses, Chapters, and rich Markdown Lessons
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAddCourse(!showAddCourse)}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-pixel uppercase transition-all flex items-center gap-2 cursor-pointer w-fit"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>{showAddCourse ? 'Close Form' : 'New Course'}</span>
-            </button>
+
+            {/* Sub-Tabs Selector */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-pixel uppercase font-bold">
+              <button
+                type="button"
+                onClick={() => setCurriculumTab('courses')}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                  curriculumTab === 'courses'
+                    ? 'bg-white text-emerald-700 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Courses ({adminCourses.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurriculumTab('languages')}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                  curriculumTab === 'languages'
+                    ? 'bg-white text-emerald-700 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Languages ({adminLanguages.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurriculumTab('paths')}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                  curriculumTab === 'paths'
+                    ? 'bg-white text-emerald-700 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>Islands ({adminPaths.length})</span>
+              </button>
+            </div>
           </div>
 
-          {/* Add Course Form */}
-          {showAddCourse && (
-            <form onSubmit={handleCreateCourse} className="mb-8 p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-4 animate-in fade-in duration-200">
-              <h4 className="text-sm font-bold font-pixel uppercase text-slate-900">Create New Course</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Course Title</label>
-                  <input
-                    type="text"
-                    required
-                    value={courseTitle}
-                    onChange={(e) => setCourseTitle(e.target.value)}
-                    placeholder="e.g. Master TypeScript Basics"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
-                  <input
-                    type="text"
-                    value={courseSlug}
-                    onChange={(e) => setCourseSlug(e.target.value)}
-                    placeholder="master-typescript"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Track</label>
-                  <select
-                    value={courseTrack}
-                    onChange={(e) => setCourseTrack(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
-                  >
-                    <option value="JavaScript">JavaScript</option>
-                    <option value="Python">Python</option>
-                    <option value="C++">C++</option>
-                    <option value="Java">Java</option>
-                    <option value="React">React</option>
-                    <option value="Backend">Backend</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Difficulty</label>
-                  <select
-                    value={courseDifficulty}
-                    onChange={(e) => setCourseDifficulty(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
-                  >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={courseDesc}
-                  onChange={(e) => setCourseDesc(e.target.value)}
-                  placeholder="Provide an overview of what the student will learn in this quest..."
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3">
+          {/* ==================================================== */}
+          {/* TAB 1: COURSES & CURRICULUM                          */}
+          {/* ==================================================== */}
+          {curriculumTab === 'courses' && (
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-700 uppercase">Courses Catalog & Prerequisite Chains</div>
                 <button
                   type="button"
-                  onClick={() => setShowAddCourse(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                  onClick={() => setShowAddCourse(!showAddCourse)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-pixel uppercase transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-pixel uppercase cursor-pointer"
-                >
-                  Create Course
+                  <PlusCircle className="w-4 h-4" />
+                  <span>{showAddCourse ? 'Close Form' : 'New Course'}</span>
                 </button>
               </div>
-            </form>
+
+              {/* Add Course Form */}
+              {showAddCourse && (
+                <form onSubmit={handleCreateCourse} className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-4 animate-in fade-in duration-200">
+                  <h4 className="text-sm font-bold font-pixel uppercase text-slate-900">Create New Course</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Course Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={courseTitle}
+                        onChange={(e) => setCourseTitle(e.target.value)}
+                        placeholder="e.g. Master TypeScript Basics"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
+                      <input
+                        type="text"
+                        value={courseSlug}
+                        onChange={(e) => setCourseSlug(e.target.value)}
+                        placeholder="master-typescript"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Track</label>
+                      <input
+                        type="text"
+                        required
+                        value={courseTrack}
+                        onChange={(e) => setCourseTrack(e.target.value)}
+                        placeholder="JavaScript"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Difficulty</label>
+                      <select
+                        value={courseDifficulty}
+                        onChange={(e) => setCourseDifficulty(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+                      >
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Language Association</label>
+                      <select
+                        value={courseLanguageId}
+                        onChange={(e) => setCourseLanguageId(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+                      >
+                        <option value="">-- None --</option>
+                        {adminLanguages.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.icon} {l.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Island / Path Association</label>
+                      <select
+                        value={coursePathId}
+                        onChange={(e) => setCoursePathId(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+                      >
+                        <option value="">-- None --</option>
+                        {adminPaths.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.icon || '🏝️'} {p.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Prerequisite Course</label>
+                      <select
+                        value={coursePrereqId}
+                        onChange={(e) => setCoursePrereqId(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+                      >
+                        <option value="">-- No Prerequisite (Freely Unlocked) --</option>
+                        {adminCourses.map((c) => (
+                          <option key={c.course.id} value={c.course.id}>
+                            {c.course.title} ({c.course.track})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      value={courseDesc}
+                      onChange={(e) => setCourseDesc(e.target.value)}
+                      placeholder="Provide an overview of what the student will learn in this quest..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCourse(false)}
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
+                    >
+                      Create Course
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Courses Table */}
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 font-pixel text-[10px] text-slate-400">
+                      <th className="p-3">#</th>
+                      <th className="p-3">COURSE</th>
+                      <th className="p-3">TRACK / LANG</th>
+                      <th className="p-3">DIFFICULTY</th>
+                      <th className="p-3">PREREQUISITE</th>
+                      <th className="p-3">CURRICULUM</th>
+                      <th className="p-3">STATUS</th>
+                      <th className="p-3 text-right">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {adminCourses.map((cSummary, idx) => {
+                      const prereqCourse = adminCourses.find((c) => c.course.id === cSummary.course.prerequisite_course_id)
+                      return (
+                        <tr key={cSummary.course.id} className="hover:bg-slate-50/50">
+                          <td className="p-3 font-mono font-bold text-slate-400">#{idx + 1}</td>
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900">{cSummary.course.title}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">/{cSummary.course.slug}</div>
+                          </td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold bg-emerald-50 text-emerald-700">
+                              {cSummary.course.track}
+                            </span>
+                          </td>
+                          <td className="p-3 font-medium text-slate-600">{cSummary.course.difficulty}</td>
+                          <td className="p-3">
+                            {prereqCourse ? (
+                              <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-medium border border-amber-200">
+                                Requires: {prereqCourse.course.title}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">None (Free)</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCourseForCurriculum(cSummary)}
+                              className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-pixel text-[9px] uppercase font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Layers className="w-3 h-3" />
+                              <span>Manage ({cSummary.chapters.length} Ch, {cSummary.totalLessons} Les)</span>
+                            </button>
+                          </td>
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePublishCourse(cSummary)}
+                              className={`px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold cursor-pointer ${
+                                cSummary.course.is_published !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                              }`}
+                            >
+                              {cSummary.course.is_published !== false ? 'Published' : 'Draft'}
+                            </button>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveCourse(cSummary.course.id, 'up')}
+                                disabled={idx === 0}
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                                title="Move Up"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveCourse(cSummary.course.id, 'down')}
+                                disabled={idx === adminCourses.length - 1}
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                                title="Move Down"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEditCourse(cSummary)}
+                                className="p-1 rounded text-blue-600 hover:bg-blue-50 cursor-pointer"
+                                title="Edit Course"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCourse(cSummary.course.id)}
+                                className="p-1 rounded text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                title="Delete Course"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
-          {/* Courses Table */}
-          <div className="overflow-x-auto border border-slate-200 rounded-xl">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 font-pixel text-[10px] text-slate-400">
-                  <th className="p-3">COURSE</th>
-                  <th className="p-3">TRACK</th>
-                  <th className="p-3">DIFFICULTY</th>
-                  <th className="p-3">CURRICULUM</th>
-                  <th className="p-3">STATUS</th>
-                  <th className="p-3 text-right">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {adminCourses.map((cSummary) => (
-                  <tr key={cSummary.course.id} className="hover:bg-slate-50/50">
-                    <td className="p-3">
-                      <div className="font-bold text-slate-900">{cSummary.course.title}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">/{cSummary.course.slug}</div>
-                    </td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold bg-emerald-50 text-emerald-700">
-                        {cSummary.course.track}
-                      </span>
-                    </td>
-                    <td className="p-3 font-medium text-slate-600">{cSummary.course.difficulty}</td>
-                    <td className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCourseForCurriculum(cSummary)}
-                        className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-pixel text-[9px] uppercase font-bold flex items-center gap-1 cursor-pointer"
+          {/* ==================================================== */}
+          {/* TAB 2: PROGRAMMING LANGUAGES                         */}
+          {/* ==================================================== */}
+          {curriculumTab === 'languages' && (
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-700 uppercase">Available Languages Catalog</div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddLanguage(!showAddLanguage)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-pixel uppercase transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>{showAddLanguage ? 'Close Form' : 'New Language'}</span>
+                </button>
+              </div>
+
+              {/* Add Language Form */}
+              {showAddLanguage && (
+                <form onSubmit={handleCreateLanguage} className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-4 animate-in fade-in duration-200">
+                  <h4 className="text-sm font-bold font-pixel uppercase text-slate-900">Add Programming Language</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Language Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={langName}
+                        onChange={(e) => setLangName(e.target.value)}
+                        placeholder="e.g. TypeScript"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
+                      <input
+                        type="text"
+                        value={langSlug}
+                        onChange={(e) => setLangSlug(e.target.value)}
+                        placeholder="typescript"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Icon / Emoji</label>
+                      <input
+                        type="text"
+                        value={langIcon}
+                        onChange={(e) => setLangIcon(e.target.value)}
+                        placeholder="🔷"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Theme Color</label>
+                      <input
+                        type="color"
+                        value={langColor}
+                        onChange={(e) => setLangColor(e.target.value)}
+                        className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      value={langDesc}
+                      onChange={(e) => setLangDesc(e.target.value)}
+                      placeholder="Brief summary of language world and concepts..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddLanguage(false)}
+                      className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
+                    >
+                      Add Language
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Languages Table */}
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 font-pixel text-[10px] text-slate-400">
+                      <th className="p-3">#</th>
+                      <th className="p-3">LANGUAGE</th>
+                      <th className="p-3">COLOR</th>
+                      <th className="p-3">DESCRIPTION</th>
+                      <th className="p-3">STATUS</th>
+                      <th className="p-3 text-right">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {adminLanguages.map((lang, idx) => (
+                      <tr key={lang.id} className="hover:bg-slate-50/50">
+                        <td className="p-3 font-mono font-bold text-slate-400">#{idx + 1}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{lang.icon || '🐍'}</span>
+                            <div>
+                              <div className="font-bold text-slate-900">{lang.name}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">/{lang.slug}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3.5 h-3.5 rounded-full border border-slate-200" style={{ backgroundColor: lang.color || '#10b981' }} />
+                            <span className="font-mono text-[10px] text-slate-600">{lang.color}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-slate-600 max-w-xs truncate">{lang.description || '(No description)'}</td>
+                        <td className="p-3">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePublishLanguage(lang)}
+                            className={`px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold cursor-pointer ${
+                              lang.is_published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {lang.is_published ? 'Published' : 'Draft'}
+                          </button>
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveLanguage(lang.id, 'up')}
+                              disabled={idx === 0}
+                              className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                              title="Move Up"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveLanguage(lang.id, 'down')}
+                              disabled={idx === adminLanguages.length - 1}
+                              className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                              title="Move Down"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditLanguage(lang)}
+                              className="p-1 rounded text-blue-600 hover:bg-blue-50 cursor-pointer"
+                              title="Edit Language"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLanguage(lang.id)}
+                              className="p-1 rounded text-rose-600 hover:bg-rose-50 cursor-pointer"
+                              title="Delete Language"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* TAB 3: LEARNING PATHS / ISLANDS                      */}
+          {/* ==================================================== */}
+          {curriculumTab === 'paths' && (
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-700 uppercase">Islands & Learning Paths</div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddPath(!showAddPath)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-pixel uppercase transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>{showAddPath ? 'Close Form' : 'New Island'}</span>
+                </button>
+              </div>
+
+              {/* Add Path Form */}
+              {showAddPath && (
+                <form onSubmit={handleCreatePath} className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-4 animate-in fade-in duration-200">
+                  <h4 className="text-sm font-bold font-pixel uppercase text-slate-900">Create Island Learning Path</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Path Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={pathTitle}
+                        onChange={(e) => setPathTitle(e.target.value)}
+                        placeholder="e.g. Web Developer Odyssey"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Slug</label>
+                      <input
+                        type="text"
+                        value={pathSlug}
+                        onChange={(e) => setPathSlug(e.target.value)}
+                        placeholder="web-dev-odyssey"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Island Name</label>
+                      <input
+                        type="text"
+                        value={pathIslandName}
+                        onChange={(e) => setPathIslandName(e.target.value)}
+                        placeholder="e.g. The Silicon Archipelago"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Icon / Emoji</label>
+                      <input
+                        type="text"
+                        value={pathIcon}
+                        onChange={(e) => setPathIcon(e.target.value)}
+                        placeholder="🏝️"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Linked Language</label>
+                      <select
+                        value={pathLanguageId}
+                        onChange={(e) => setPathLanguageId(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium"
                       >
-                        <Layers className="w-3 h-3" />
-                        <span>Manage ({cSummary.chapters.length} Ch, {cSummary.totalLessons} Les)</span>
-                      </button>
-                    </td>
-                    <td className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleTogglePublishCourse(cSummary)}
-                        className={`px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold cursor-pointer ${
-                          cSummary.course.is_published !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
-                        }`}
-                      >
-                        {cSummary.course.is_published !== false ? 'Published' : 'Draft'}
-                      </button>
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCourse(cSummary.course.id)}
-                          className="p-1 rounded border border-rose-200 text-rose-600 hover:bg-rose-50 cursor-pointer"
-                          title="Delete Course"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        <option value="">-- No Language Lock --</option>
+                        {adminLanguages.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.icon} {l.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      value={pathDesc}
+                      onChange={(e) => setPathDesc(e.target.value)}
+                      placeholder="Comprehensive overview of this island pathway..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPath(false)}
+                      className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-pixel uppercase font-bold cursor-pointer"
+                    >
+                      Create Island Path
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Paths Table */}
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 font-pixel text-[10px] text-slate-400">
+                      <th className="p-3">#</th>
+                      <th className="p-3">ISLAND / PATH</th>
+                      <th className="p-3">LANGUAGE</th>
+                      <th className="p-3">DESCRIPTION</th>
+                      <th className="p-3">STATUS</th>
+                      <th className="p-3 text-right">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {adminPaths.map((p, idx) => {
+                      const linkedLang = adminLanguages.find((l) => l.id === p.language_id)
+                      return (
+                        <tr key={p.id} className="hover:bg-slate-50/50">
+                          <td className="p-3 font-mono font-bold text-slate-400">#{idx + 1}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{p.icon || '🏝️'}</span>
+                              <div>
+                                <div className="font-bold text-slate-900">{p.title}</div>
+                                <div className="text-[10px] text-slate-400 font-mono">
+                                  {p.island_name ? `${p.island_name} • ` : ''}/{p.slug}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            {linkedLang ? (
+                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-bold">
+                                {linkedLang.icon} {linkedLang.name}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">General</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-slate-600 max-w-xs truncate">{p.description || '(No description)'}</td>
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePublishPath(p)}
+                              className={`px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold cursor-pointer ${
+                                p.is_published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                              }`}
+                            >
+                              {p.is_published ? 'Published' : 'Draft'}
+                            </button>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleMovePath(p.id, 'up')}
+                                disabled={idx === 0}
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                                title="Move Up"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMovePath(p.id, 'down')}
+                                disabled={idx === adminPaths.length - 1}
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                                title="Move Down"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEditPath(p)}
+                                className="p-1 rounded text-blue-600 hover:bg-blue-50 cursor-pointer"
+                                title="Edit Path"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePath(p.id)}
+                                className="p-1 rounded text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                title="Delete Path"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Coding Exercises Authoring Studio */}
@@ -1438,8 +3477,8 @@ export const AdminDashboard: React.FC = () => {
 
           {showAddExercise && (
             <form onSubmit={handleCreateExercise} className="bg-slate-50 p-6 rounded-2xl border border-slate-200/70 mb-6 flex flex-col gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Exercise Title</label>
                   <input
                     type="text"
@@ -1450,7 +3489,19 @@ export const AdminDashboard: React.FC = () => {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Custom Slug (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="auto-generated-if-blank"
+                    value={exSlug}
+                    onChange={(e) => setExSlug(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Programming Language</label>
                   <select
@@ -1462,8 +3513,7 @@ export const AdminDashboard: React.FC = () => {
                     <option value="python">Python</option>
                     <option value="cpp">C++</option>
                     <option value="java">Java</option>
-                    <option value="html">HTML</option>
-                    <option value="css">CSS</option>
+                    <option value="html">HTML / Web Preview</option>
                   </select>
                 </div>
 
@@ -1481,16 +3531,28 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">XP Reward</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1000"
+                    value={exXpReward}
+                    onChange={(e) => setExXpReward(parseInt(e.target.value, 10) || 0)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-amber-600 focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Linked Lesson (Optional)</label>
                   <select
                     value={exLessonId}
                     onChange={(e) => setExLessonId(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                   >
-                    <option value="">-- No Linked Lesson --</option>
+                    <option value="">-- Standalone Challenge --</option>
                     {adminLessons.map((l) => (
                       <option key={l.id} value={l.id}>
-                        {l.title}
+                        {l.course_title ? `${l.course_title} > ${l.title}` : l.title}
                       </option>
                     ))}
                   </select>
@@ -1520,7 +3582,7 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Sample Input / STDIN (Optional)</label>
                   <input
@@ -1541,14 +3603,27 @@ export const AdminDashboard: React.FC = () => {
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Solution Code (Secure)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="// Reference solution code"
+                    value={exSolutionCode}
+                    onChange={(e) => setExSolutionCode(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Solution Explanation</label>
-                  <input
-                    type="text"
-                    placeholder="Brief explanation shown after pass"
+                  <textarea
+                    rows={2}
+                    placeholder="Brief explanation of solution"
                     value={exSolution}
                     onChange={(e) => setExSolution(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                   />
                 </div>
               </div>
@@ -1565,7 +3640,7 @@ export const AdminDashboard: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold font-pixel uppercase rounded-xl cursor-pointer"
                 >
-                  Deploy Exercise 🚀
+                  Deploy Challenge 🚀
                 </button>
               </div>
             </form>
@@ -1576,65 +3651,105 @@ export const AdminDashboard: React.FC = () => {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 text-slate-400 font-pixel text-[10px]">
-                  <th className="py-3 px-4">EXERCISE</th>
+                  <th className="py-3 px-4">#</th>
+                  <th className="py-3 px-4">CHALLENGE</th>
+                  <th className="py-3 px-4">LINKED LESSON</th>
                   <th className="py-3 px-4">LANGUAGE</th>
                   <th className="py-3 px-4">DIFFICULTY</th>
-                  <th className="py-3 px-4">STARTER CODE</th>
+                  <th className="py-3 px-4">XP</th>
                   <th className="py-3 px-4">STATUS</th>
                   <th className="py-3 px-4 text-right">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                {adminChallenges.map((ch) => (
-                  <tr key={ch.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-slate-900">{ch.title}</td>
-                    <td className="py-3.5 px-4">
-                      <span className="px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold bg-purple-100 text-purple-700">
-                        {ch.language || ch.category}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-500 font-medium">{ch.difficulty}</td>
-                    <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600 truncate max-w-48">
-                      {ch.starter_code ? '✓ Template Configured' : 'Empty'}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        ch.is_published ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {ch.is_published ? 'Published' : 'Draft'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenTestCases(ch)}
-                          className="p-1.5 rounded-lg border border-purple-200 hover:bg-purple-50 text-purple-700 transition-colors cursor-pointer flex items-center gap-1 font-pixel text-[10px]"
-                          title="Manage Test Cases"
-                        >
-                          <ListChecks className="w-3.5 h-3.5" />
-                          <span>Test Cases</span>
-                        </button>
+                {adminChallenges.map((ch, idx) => {
+                  const matchedLesson = adminLessons.find((l) => l.id === ch.lesson_id)
+                  const testCasesCount = exerciseTestCases.filter((t) => t.exercise_id === ch.id).length
+
+                  return (
+                    <tr key={ch.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-400">{ch.order_index ?? idx + 1}</td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-slate-900">{ch.title}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">/{ch.slug}</div>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600">
+                        {matchedLesson ? (
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-medium truncate max-w-40 block">
+                            {matchedLesson.title}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Standalone</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-pixel uppercase font-bold bg-purple-100 text-purple-700">
+                          {ch.language || ch.category}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 font-medium">{ch.difficulty}</td>
+                      <td className="py-3.5 px-4 font-bold text-amber-600">+{ch.xp_reward ?? 75} XP</td>
+                      <td className="py-3.5 px-4">
                         <button
                           type="button"
                           onClick={() => handleTogglePublishExercise(ch)}
-                          className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-                          title={ch.is_published ? 'Unpublish' : 'Publish'}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${
+                            ch.is_published ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          }`}
                         >
-                          {ch.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          {ch.is_published ? 'Published' : 'Draft'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteExercise(ch.id)}
-                          className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Delete Exercise"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveChallenge(ch.id, 'up')}
+                            disabled={idx === 0}
+                            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveChallenge(ch.id, 'down')}
+                            disabled={idx === adminChallenges.length - 1}
+                            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenTestCases(ch)}
+                            className="p-1.5 rounded-lg border border-purple-200 hover:bg-purple-50 text-purple-700 transition-colors cursor-pointer flex items-center gap-1 font-pixel text-[10px]"
+                            title="Manage Test Cases"
+                          >
+                            <ListChecks className="w-3.5 h-3.5" />
+                            <span>Tests ({testCasesCount})</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditExercise(ch)}
+                            className="p-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                            title="Edit Challenge"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExercise(ch.id)}
+                            className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Delete Exercise"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

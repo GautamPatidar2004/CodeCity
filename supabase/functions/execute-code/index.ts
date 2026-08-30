@@ -18,7 +18,16 @@ const SUPPORTED_LANGUAGES: Record<string, { language: string; version: string }>
 
 const MAX_SOURCE_BYTES = 64 * 1024 // 64 KB
 const MAX_INPUT_BYTES = 8 * 1024 // 8 KB
+const MAX_OUTPUT_CHARS = 16000 // 16,000 chars output limit
 const EXECUTION_TIMEOUT_MS = 10000 // 10s
+
+function truncate(str?: string): string {
+  if (!str) return ''
+  if (str.length > MAX_OUTPUT_CHARS) {
+    return str.slice(0, MAX_OUTPUT_CHARS) + '\n\n[... Output truncated: Exceeded maximum allowed size ...]'
+  }
+  return str
+}
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -31,7 +40,7 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           status: 'error',
-          stderr: 'Unauthorized. Authentication token required for code execution.',
+          stderr: 'Unauthorized. Authentication required for code execution.',
         }),
         { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
       )
@@ -98,12 +107,14 @@ serve(async (req: Request) => {
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), EXECUTION_TIMEOUT_MS)
-
     const startTime = Date.now()
 
     const pistonRes = await fetch('https://emkc.org/api/v2/piston/execute', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'CodeDex-Learning-Platform/1.0',
+      },
       body: JSON.stringify({
         language: langConfig.language,
         version: langConfig.version,
@@ -120,7 +131,7 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           status: 'error',
-          stderr: 'Execution provider error. Please try again.',
+          stderr: 'Execution provider is temporarily unavailable. Please try again.',
           execution_time: elapsedMs,
         }),
         { status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
@@ -135,8 +146,8 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           status: 'compile_error',
-          stdout: compile.stdout || '',
-          stderr: compile.stderr || compile.output || 'Compilation failed.',
+          stdout: truncate(compile.stdout),
+          stderr: truncate(compile.stderr || compile.output || 'Compilation failed.'),
           exit_code: compile.code,
           execution_time: elapsedMs,
         }),
@@ -148,8 +159,8 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           status: 'timeout',
-          stdout: run.stdout || '',
-          stderr: 'Execution timed out (process exceeded time limit).',
+          stdout: truncate(run.stdout),
+          stderr: 'Execution timed out (process exceeded 10-second limit).',
           exit_code: run.code ?? 124,
           execution_time: elapsedMs,
         }),
@@ -161,8 +172,8 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: isRuntimeError ? 'runtime_error' : 'success',
-        stdout: run?.stdout || (isRuntimeError ? '' : run?.output || ''),
-        stderr: run?.stderr || (isRuntimeError ? run?.output || '' : ''),
+        stdout: truncate(run?.stdout || (isRuntimeError ? '' : run?.output || '')),
+        stderr: truncate(run?.stderr || (isRuntimeError ? run?.output || '' : '')),
         exit_code: run?.code ?? 0,
         execution_time: elapsedMs,
       }),

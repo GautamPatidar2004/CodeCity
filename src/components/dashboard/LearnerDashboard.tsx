@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useLearningProgress } from '../../lib/learning'
 import { useGamification } from '../../lib/gamification'
 import { useAchievementsAndNotifications } from '../../lib/achievements'
-import { LessonModal } from '../learning/LessonModal'
+import { LessonPage } from '../../pages/LessonPage'
 import {
   Flame,
   Star,
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 
 export const LearnerDashboard: React.FC = () => {
-  const { user, profile, loading: authLoading } = useAuth()
+  const { user, profile, refreshProfile, loading: authLoading } = useAuth()
   const { courses, resumePoint, refreshProgress, loading: learningLoading } = useLearningProgress(user?.id)
   const { stats, refreshGamification, loading: gamificationLoading } = useGamification(user?.id, profile?.xp, profile?.streak, profile?.level)
   const { badges, achievements, activities, refreshAll, loading: achievementsLoading } =
@@ -40,6 +40,21 @@ export const LearnerDashboard: React.FC = () => {
     refreshProgress()
     refreshGamification()
     refreshAll()
+    if (refreshProfile) {
+      refreshProfile()
+    }
+  }
+
+  if (activeLessonId) {
+    return (
+      <LessonPage
+        lessonId={activeLessonId}
+        userId={user?.id}
+        onBack={() => setActiveLessonId(null)}
+        onNavigateLesson={(nextId) => setActiveLessonId(nextId)}
+        onLessonCompleted={handleLessonRefresh}
+      />
+    )
   }
 
   if (isLoading) {
@@ -62,16 +77,6 @@ export const LearnerDashboard: React.FC = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto flex flex-col gap-8 pb-12">
-      {/* Active Lesson Modal */}
-      {activeLessonId && (
-        <LessonModal
-          lessonId={activeLessonId}
-          userId={user?.id}
-          onClose={() => setActiveLessonId(null)}
-          onLessonCompleted={handleLessonRefresh}
-          onNavigateLesson={(nextId) => setActiveLessonId(nextId)}
-        />
-      )}
 
       {/* Mascot Welcome & Resume Learning Card */}
       <GamifiedCard accentColor="emerald" className="flex flex-col sm:flex-row items-center gap-6 p-8 bg-gradient-to-r from-emerald-500/10 via-white to-white">

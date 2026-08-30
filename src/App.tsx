@@ -4,6 +4,7 @@ import { AuthPage } from './pages/AuthPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { QuestsPage } from './pages/QuestsPage'
 import { ProjectsPage } from './pages/ProjectsPage'
+import { CommunityPage } from './pages/CommunityPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { AppNavbar, type ActiveTab } from './components/layout/AppNavbar'
 import { Loader2 } from 'lucide-react'
@@ -40,6 +41,7 @@ const MainApp: React.FC = () => {
       {activeTab === 'dashboard' && <DashboardPage />}
       {activeTab === 'quests' && <QuestsPage />}
       {activeTab === 'projects' && <ProjectsPage />}
+      {activeTab === 'community' && <CommunityPage />}
       {activeTab === 'analytics' && <AnalyticsPage />}
     </div>
   )

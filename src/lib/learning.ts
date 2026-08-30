@@ -41,7 +41,7 @@ export interface ChapterProgressSummary {
   completedLessons: number
   progressPercent: number
   isCompleted: boolean
-  lessons: (Lesson & { isCompleted: boolean })[]
+  lessons: (Lesson & { isCompleted: boolean; isUnlocked: boolean; isCurrent: boolean })[]
 }
 
 export interface Course {
@@ -119,6 +119,7 @@ export interface LessonNavInfo {
   id: string
   courseId: string
   title: string
+  isUnlocked?: boolean
 }
 
 export interface LessonDetail {
@@ -133,7 +134,11 @@ export interface LessonDetail {
   summary?: string
   content?: string
   orderIndex: number
+  lessonIndex: number
+  totalLessons: number
   isCompleted: boolean
+  isUnlocked: boolean
+  lockReason?: string
   challenge?: {
     id: string
     title: string
@@ -143,34 +148,33 @@ export interface LessonDetail {
     instructions?: string
     sample_input?: string
     hints?: string[]
+    xp_reward?: number
     solution_explanation?: string
   }
   prevLesson?: LessonNavInfo
   nextLesson?: LessonNavInfo
 }
 
-const DEFAULT_LANGUAGES: Language[] = [
-  { id: 'l-js', name: 'JavaScript', slug: 'javascript', icon: '⚡', color: '#F7DF1E', description: 'The web scripting language', order_index: 1, is_published: true },
-  { id: 'l-py', name: 'Python', slug: 'python', icon: '🐍', color: '#3776AB', description: 'Beginner-friendly language', order_index: 2, is_published: true },
-  { id: 'l-react', name: 'React', slug: 'react', icon: '⚛️', color: '#61DAFB', description: 'UI component framework', order_index: 3, is_published: true },
-  { id: 'l-cpp', name: 'C++', slug: 'cpp', icon: '⚙️', color: '#00599C', description: 'Fast systems programming', order_index: 4, is_published: true },
-  { id: 'l-java', name: 'Java', slug: 'java', icon: '☕', color: '#ED8B00', description: 'Object-oriented platform', order_index: 5, is_published: true },
-  { id: 'l-backend', name: 'Backend', slug: 'backend', icon: '🛠️', color: '#10B981', description: 'Server architectures', order_index: 6, is_published: true },
-]
-
-export async function fetchLanguages(): Promise<Language[]> {
+export async function fetchLanguages(includeUnpublished = false): Promise<Language[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('languages')
       .select('*')
+      .order('order_index', { ascending: true })
 
-    if (error || !data || data.length === 0) {
-      return DEFAULT_LANGUAGES
+    if (!includeUnpublished) {
+      query = query.eq('is_published', true)
     }
 
-    return (data as Language[]).filter((l) => l.is_published !== false)
+    const { data, error } = await query
+
+    if (error || !data) {
+      return []
+    }
+
+    return data as Language[]
   } catch {
-    return DEFAULT_LANGUAGES
+    return []
   }
 }
 
@@ -239,27 +243,50 @@ export async function fetchCoursesWithProgress(
       }
     }
 
-    // Calculate completion map for unlocking
+    // First calculate course completions for prerequisite unlocks
     const courseCompletionMap = new Map<string, boolean>()
     const courseTitleMap = new Map<string, string>()
     rawCourses.forEach((c) => courseTitleMap.set(c.id, c.title))
 
-    const coursesWithChapters = rawCourses.map((c) => {
+    rawCourses.forEach((c) => {
       const chapters = (chaptersByCourse.get(c.id) || []).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
       const allCourseLessons = chapters.flatMap((ch) => ch.lessons || [])
       const total = allCourseLessons.length
       const completed = allCourseLessons.filter((l) => progressMap.get(l.id) === true).length
-      const isDone = total > 0 && completed === total
-      courseCompletionMap.set(c.id, isDone)
+      courseCompletionMap.set(c.id, total > 0 && completed === total)
+    })
+
+    const coursesWithChapters = rawCourses.map((c) => {
+      const chapters = (chaptersByCourse.get(c.id) || []).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+      const prereqId = c.prerequisite_course_id
+      const isCourseUnlocked = !prereqId || Boolean(courseCompletionMap.get(prereqId))
+
+      // Sequential Lesson Unlocking
+      let prevLessonCompleted = true
+      let currentLessonFound = false
 
       const chaptersWithProg: ChapterProgressSummary[] = chapters.map((ch) => {
         const chLessons = ch.lessons || []
-        const chLessonsWithProg = chLessons.map((l) => ({
-          ...l,
-          isCompleted: progressMap.get(l.id) === true,
-        }))
+        const chLessonsWithProg = chLessons.map((l) => {
+          const isDone = progressMap.get(l.id) === true
+          const unlocked = isCourseUnlocked && (prevLessonCompleted || isDone)
+          const isCur = unlocked && !isDone && !currentLessonFound
+          if (isCur) {
+            currentLessonFound = true
+          }
+          prevLessonCompleted = isDone
+
+          return {
+            ...l,
+            isCompleted: isDone,
+            isUnlocked: unlocked,
+            isCurrent: isCur,
+          }
+        })
+
         const chTotal = chLessonsWithProg.length
         const chComp = chLessonsWithProg.filter((l) => l.isCompleted).length
+
         return {
           id: ch.id,
           course_id: c.id,
@@ -273,50 +300,43 @@ export async function fetchCoursesWithProgress(
         }
       })
 
+      const allCourseLessonsWithProg = chaptersWithProg.flatMap((ch) => ch.lessons)
+      const total = allCourseLessonsWithProg.length
+      const completed = allCourseLessonsWithProg.filter((l) => l.isCompleted).length
+      const isDone = total > 0 && completed === total
+      const nextLesson = allCourseLessonsWithProg.find((l) => l.isUnlocked && !l.isCompleted) || allCourseLessonsWithProg[0]
+
+      const enrollmentInfo = enrollmentMap.get(c.id)
+      const isEnrolled = Boolean(enrollmentInfo || completed > 0)
+
       return {
-        course: c,
+        course: {
+          id: c.id,
+          path_id: c.path_id,
+          language_id: c.language_id,
+          prerequisite_course_id: prereqId,
+          title: c.title,
+          slug: c.slug,
+          description: c.description,
+          track: c.track,
+          difficulty: c.difficulty,
+          order_index: c.order_index ?? 0,
+          is_published: c.is_published,
+        },
         chapters: chaptersWithProg,
-        allLessons: allCourseLessons,
         totalLessons: total,
         completedLessons: completed,
         progressPercent: total > 0 ? Math.round((completed / total) * 100) : 0,
         isCompleted: isDone,
-      }
-    })
-
-    return coursesWithChapters.map(({ course, chapters, allLessons, totalLessons, completedLessons, progressPercent, isCompleted }) => {
-      const nextLesson = allLessons.find((l) => !progressMap.get(l.id))
-      const enrollmentInfo = enrollmentMap.get(course.id)
-      const isEnrolled = Boolean(enrollmentInfo || completedLessons > 0)
-      const prereqId = course.prerequisite_course_id
-      const isUnlocked = !prereqId || Boolean(courseCompletionMap.get(prereqId))
-
-      return {
-        course: {
-          id: course.id,
-          path_id: course.path_id,
-          language_id: course.language_id,
-          prerequisite_course_id: prereqId,
-          title: course.title,
-          slug: course.slug,
-          description: course.description,
-          track: course.track,
-          difficulty: course.difficulty,
-          order_index: course.order_index ?? 0,
-          is_published: course.is_published,
-        },
-        chapters,
-        totalLessons,
-        completedLessons,
-        progressPercent,
-        isCompleted,
         nextLesson,
         isEnrolled,
-        isUnlocked,
+        isUnlocked: isCourseUnlocked,
         prerequisiteCourseTitle: prereqId ? courseTitleMap.get(prereqId) : undefined,
         lastAccessedAt: enrollmentInfo?.last_accessed_at,
       }
-    }).sort((a, b) => (a.course.order_index ?? 0) - (b.course.order_index ?? 0))
+    })
+
+    return coursesWithChapters.sort((a, b) => (a.course.order_index ?? 0) - (b.course.order_index ?? 0))
   } catch (err) {
     console.error('Error fetching courses with progress:', err)
     return []
@@ -328,12 +348,27 @@ export async function fetchLearningPathsWithProgress(
   languageFilter?: string
 ): Promise<LearningPath[]> {
   try {
-    const [pathsRes, allCourses] = await Promise.all([
-      supabase.from('learning_paths').select('*'),
+    const [pathsRes, allCourses, languagesRes] = await Promise.all([
+      supabase.from('learning_paths').select('*').order('order_index', { ascending: true }),
       fetchCoursesWithProgress(userId, languageFilter),
+      supabase.from('languages').select('*'),
     ])
 
-    const rawPaths = (pathsRes.data || []).filter((p) => p.is_published !== false)
+    const languages = (languagesRes.data || []) as Language[]
+    const langMap = new Map(languages.map((l) => [l.id, l]))
+    const langNameMap = new Map(languages.map((l) => [l.name.toLowerCase(), l.id]))
+
+    let rawPaths = (pathsRes.data || []).filter((p) => p.is_published !== false)
+
+    if (languageFilter && languageFilter !== 'All') {
+      const targetLangId = langNameMap.get(languageFilter.toLowerCase())
+      rawPaths = rawPaths.filter((p) => 
+        p.language_id === targetLangId || 
+        p.title.toLowerCase().includes(languageFilter.toLowerCase()) || 
+        p.island_name?.toLowerCase().includes(languageFilter.toLowerCase())
+      )
+    }
+
     if (rawPaths.length === 0) return []
 
     const coursesByPath = new Map<string, CourseProgressSummary[]>()
@@ -355,6 +390,7 @@ export async function fetchLearningPathsWithProgress(
       return {
         id: p.id,
         language_id: p.language_id,
+        language: p.language_id ? langMap.get(p.language_id) : undefined,
         title: p.title,
         slug: p.slug,
         description: p.description,
@@ -407,7 +443,46 @@ export async function fetchLessonDetail(lessonId: string, userId?: string): Prom
 
     const courseId = courseData.id
 
-    // Fetch all chapters and lessons in this course to compute true cross-module ordering
+    // Check course prerequisite completion
+    if (courseData.prerequisite_course_id && userId) {
+      const { data: prereqChapters } = await supabase
+        .from('chapters')
+        .select('lessons(id)')
+        .eq('course_id', courseData.prerequisite_course_id)
+      
+      const prereqLessonIds = (prereqChapters || []).flatMap((ch: any) => (ch.lessons || []).map((l: any) => l.id))
+      if (prereqLessonIds.length > 0) {
+        const { data: completedPrereq } = await supabase
+          .from('lesson_progress')
+          .select('lesson_id')
+          .eq('user_id', userId)
+          .eq('is_completed', true)
+          .in('lesson_id', prereqLessonIds)
+
+        if (!completedPrereq || completedPrereq.length < prereqLessonIds.length) {
+          const { data: prereqCourse } = await supabase.from('courses').select('title').eq('id', courseData.prerequisite_course_id).single()
+          return {
+            id: lessonData.id,
+            chapterId: lessonData.chapter_id,
+            chapterTitle: chapterData.title,
+            courseId,
+            courseTitle: courseData.title,
+            track: courseData.track,
+            title: lessonData.title,
+            slug: lessonData.slug,
+            summary: lessonData.summary,
+            orderIndex: lessonData.order_index ?? 0,
+            lessonIndex: 1,
+            totalLessons: 1,
+            isCompleted: false,
+            isUnlocked: false,
+            lockReason: `Prerequisite course "${prereqCourse?.title || 'Required Course'}" must be completed first.`,
+          }
+        }
+      }
+    }
+
+    // Fetch all chapters and lessons in this course to compute sequential progression
     const { data: courseChapters } = await supabase
       .from('chapters')
       .select('*')
@@ -444,15 +519,16 @@ export async function fetchLessonDetail(lessonId: string, userId?: string): Prom
     const nextLesson = currentIndex >= 0 && currentIndex < flattenedLessons.length - 1 ? flattenedLessons[currentIndex + 1] : undefined
 
     let isCompleted = false
+    let isUnlocked = currentIndex === 0 // First lesson in course is always unlocked
+    let lockReason: string | undefined
+
     if (userId) {
       const now = new Date().toISOString()
-      const [progressRes, existingEnrollRes] = await Promise.all([
+      const [allProgressRes, existingEnrollRes] = await Promise.all([
         supabase
           .from('lesson_progress')
-          .select('is_completed')
-          .eq('user_id', userId)
-          .eq('lesson_id', lessonId)
-          .maybeSingle(),
+          .select('lesson_id, is_completed')
+          .eq('user_id', userId),
         supabase
           .from('enrollments')
           .select('id')
@@ -461,22 +537,61 @@ export async function fetchLessonDetail(lessonId: string, userId?: string): Prom
           .maybeSingle(),
       ])
 
-      isCompleted = Boolean(progressRes.data?.is_completed)
+      const completedSet = new Set(
+        (allProgressRes.data || []).filter((p) => p.is_completed).map((p) => p.lesson_id)
+      )
 
-      if (existingEnrollRes.data?.id) {
-        await supabase
-          .from('enrollments')
-          .update({ last_lesson_id: lessonId, last_accessed_at: now })
-          .eq('id', existingEnrollRes.data.id)
-      } else {
-        await supabase
-          .from('enrollments')
-          .insert({
-            user_id: userId,
-            course_id: courseId,
-            last_lesson_id: lessonId,
-            last_accessed_at: now,
-          })
+      isCompleted = completedSet.has(lessonId)
+
+      // Sequential unlock check
+      if (currentIndex > 0) {
+        const prevId = flattenedLessons[currentIndex - 1].id
+        if (completedSet.has(prevId) || isCompleted) {
+          isUnlocked = true
+        } else {
+          isUnlocked = false
+          lockReason = `Please complete the previous lesson "${prevLesson?.title || 'Previous Quest'}" first.`
+        }
+      }
+
+      if (isUnlocked) {
+        if (existingEnrollRes.data?.id) {
+          await supabase
+            .from('enrollments')
+            .update({ last_lesson_id: lessonId, last_accessed_at: now })
+            .eq('id', existingEnrollRes.data.id)
+        } else {
+          await supabase
+            .from('enrollments')
+            .insert({
+              user_id: userId,
+              course_id: courseId,
+              last_lesson_id: lessonId,
+              last_accessed_at: now,
+            })
+        }
+      }
+    }
+
+    if (!isUnlocked) {
+      return {
+        id: lessonData.id,
+        chapterId: lessonData.chapter_id,
+        chapterTitle: chapterData.title,
+        courseId,
+        courseTitle: courseData.title,
+        track: courseData.track,
+        title: lessonData.title,
+        slug: lessonData.slug,
+        summary: lessonData.summary,
+        orderIndex: lessonData.order_index ?? 0,
+        lessonIndex: currentIndex >= 0 ? currentIndex + 1 : 1,
+        totalLessons: flattenedLessons.length || 1,
+        isCompleted,
+        isUnlocked: false,
+        lockReason: lockReason || 'This quest is locked.',
+        prevLesson,
+        nextLesson,
       }
     }
 
@@ -499,7 +614,10 @@ export async function fetchLessonDetail(lessonId: string, userId?: string): Prom
       summary: lessonData.summary,
       content: lessonData.content,
       orderIndex: lessonData.order_index ?? 0,
+      lessonIndex: currentIndex >= 0 ? currentIndex + 1 : 1,
+      totalLessons: flattenedLessons.length || 1,
       isCompleted,
+      isUnlocked: true,
       challenge: challengeData
         ? {
             id: challengeData.id,
@@ -510,7 +628,8 @@ export async function fetchLessonDetail(lessonId: string, userId?: string): Prom
             instructions: challengeData.instructions || challengeData.description || undefined,
             sample_input: challengeData.sample_input || undefined,
             hints: challengeData.hints || [],
-            solution_explanation: challengeData.solution_explanation || undefined,
+            xp_reward: challengeData.xp_reward ?? 75,
+            solution_explanation: isCompleted ? challengeData.solution_explanation : undefined,
           }
         : undefined,
       prevLesson,
@@ -905,6 +1024,84 @@ export async function deleteAdminLesson(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.from('lessons').delete().eq('id', id)
     return !error
+  } catch {
+    return false
+  }
+}
+
+export async function fetchAdminLearningPaths(): Promise<LearningPath[]> {
+  try {
+    const { data, error } = await supabase
+      .from('learning_paths')
+      .select('*')
+      .order('order_index', { ascending: true })
+    if (error || !data) return []
+    return data as LearningPath[]
+  } catch {
+    return []
+  }
+}
+
+export async function reorderLanguages(items: { id: string; order_index: number }[]): Promise<boolean> {
+  try {
+    await Promise.all(
+      items.map((item) =>
+        supabase.from('languages').update({ order_index: item.order_index }).eq('id', item.id)
+      )
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function reorderLearningPaths(items: { id: string; order_index: number }[]): Promise<boolean> {
+  try {
+    await Promise.all(
+      items.map((item) =>
+        supabase.from('learning_paths').update({ order_index: item.order_index }).eq('id', item.id)
+      )
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function reorderCourses(items: { id: string; order_index: number }[]): Promise<boolean> {
+  try {
+    await Promise.all(
+      items.map((item) =>
+        supabase.from('courses').update({ order_index: item.order_index }).eq('id', item.id)
+      )
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function reorderChapters(items: { id: string; order_index: number }[]): Promise<boolean> {
+  try {
+    await Promise.all(
+      items.map((item) =>
+        supabase.from('chapters').update({ order_index: item.order_index }).eq('id', item.id)
+      )
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function reorderLessons(items: { id: string; order_index: number }[]): Promise<boolean> {
+  try {
+    await Promise.all(
+      items.map((item) =>
+        supabase.from('lessons').update({ order_index: item.order_index }).eq('id', item.id)
+      )
+    )
+    return true
   } catch {
     return false
   }

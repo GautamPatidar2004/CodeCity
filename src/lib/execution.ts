@@ -170,7 +170,7 @@ export async function executeCode(
         }
       }
 
-      const isRuntimeErr = run && run.code !== 0
+      const isRuntimeErr = Boolean(run && run.code !== 0)
       return {
         status: isRuntimeErr ? 'runtime_error' : 'success',
         stdout: run?.stdout || (isRuntimeErr ? '' : run?.output || ''),
@@ -183,30 +183,9 @@ export async function executeCode(
     // Provider error
   }
 
-  // 3. Fallback for basic Python statements if external runner is offline
-  if (cleanLang === 'python' || cleanLang === 'py') {
-    const matchPrint = sourceCode.match(/print\((.*)\)/s)
-    if (matchPrint) {
-      let outputText = matchPrint[1].trim()
-      // Remove outer quotes if simple string
-      if ((outputText.startsWith('"') && outputText.endsWith('"')) || (outputText.startsWith("'") && outputText.endsWith("'"))) {
-        outputText = outputText.slice(1, -1)
-      } else if (outputText.includes('odd_squares') || outputText.includes('[x**2')) {
-        const oddSq = [1, 9, 25, 49, 81, 121, 169, 225, 289, 361]
-        outputText = `Odd Squares: [${oddSq.join(', ')}]`
-      }
-      return {
-        status: 'success',
-        stdout: outputText,
-        stderr: '',
-        exit_code: 0,
-      }
+    return {
+      status: 'error',
+      stdout: '',
+      stderr: 'Code execution is temporarily unavailable. Please try again.',
     }
   }
-
-  return {
-    status: 'error',
-    stdout: '',
-    stderr: `Remote execution provider returned 401 or was unreachable for ${language}.`,
-  }
-}

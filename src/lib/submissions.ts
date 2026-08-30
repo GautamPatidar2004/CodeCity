@@ -49,15 +49,21 @@ export interface UserSubmissionRecord {
 }
 
 export async function fetchExerciseTestCases(
-  exerciseId: string
+  exerciseId: string,
+  includeInactive = false
 ): Promise<ExerciseTestCase[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('exercise_test_cases')
       .select('*')
       .eq('exercise_id', exerciseId)
-      .eq('is_active', true)
       .order('order_index', { ascending: true })
+
+    if (!includeInactive) {
+      query = query.eq('is_active', true)
+    }
+
+    const { data, error } = await query
 
     if (error || !data) {
       return []
@@ -133,6 +139,19 @@ export async function deleteAdminTestCase(id: string): Promise<boolean> {
   }
 }
 
+export async function reorderTestCases(items: { id: string; order_index: number }[]): Promise<boolean> {
+  try {
+    await Promise.all(
+      items.map((item) =>
+        supabase.from('exercise_test_cases').update({ order_index: item.order_index }).eq('id', item.id)
+      )
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
 function normalizeOutput(str: string): string {
   return str
     .replace(/\r\n/g, '\n')
@@ -175,12 +194,29 @@ export async function submitExerciseSolution(
   // 1. Fetch active test cases for this exercise
   const testCases = await fetchExerciseTestCases(exerciseId)
 
-  // 2. Fetch challenge metadata to link course/lesson if applicable
-  const { data: challengeData } = await supabase
+  // 2. Validate challenge is published and exists
+  const { data: challengeData, error: challengeError } = await supabase
     .from('challenges')
-    .select('id, course_id, lesson_id, is_published')
+    .select('id, course_id, lesson_id, title, xp_reward, is_published')
     .eq('id', exerciseId)
     .maybeSingle()
+
+  if (challengeError || !challengeData || challengeData.is_published === false) {
+    return {
+      status: 'execution_error',
+      passedCount: 0,
+      totalCount: 0,
+      testResults: [
+        {
+          testCaseId: 'error-challenge',
+          orderIndex: 1,
+          isHidden: false,
+          passed: false,
+          error: 'Challenge is unavailable or unpublished.',
+        },
+      ],
+    }
+  }
 
   const testResults: TestCaseResult[] = []
   let overallStatus: SubmissionResult['status'] = 'passed'
@@ -280,25 +316,56 @@ export async function submitExerciseSolution(
     console.error('Error recording exercise submission:', err)
   }
 
-  // 4. If all tests passed, update challenge and lesson progress idempotently
+  // 4. Learning Progression & Gamification on Successful Pass
   if (overallStatus === 'passed') {
-    await recordChallengeSubmission(userId, exerciseId, true, 100)
-
-    // Idempotently award 75 XP for coding challenge
-    const chalXp = await awardXp(userId, 75, 'challenge_completed', exerciseId)
-    if (chalXp.awarded) {
-      await recordUserActivity(userId, 'challenge_completed', 'Solved a coding challenge (+75 XP) ⭐')
-      await createUserNotification(
-        userId,
-        'Challenge Conquered! ⭐',
-        'You solved all test cases for this coding challenge and earned 75 XP!',
-        '🏆'
-      )
-      await syncUserBadgesAndAchievements(userId)
+    // Record challenge completion in challenge_progress
+    try {
+      await recordChallengeSubmission(userId, exerciseId, true, 100)
+    } catch (err) {
+      console.error('Error updating challenge progress:', err)
     }
 
-    if (challengeData?.course_id && challengeData?.lesson_id) {
-      await recordLessonCompletion(userId, challengeData.course_id, challengeData.lesson_id, true)
+    // Award configured XP idempotently
+    const xpReward = challengeData.xp_reward ?? 75
+    try {
+      const xpRes = await awardXp(userId, xpReward, 'challenge_completed', exerciseId)
+      if (xpRes.awarded) {
+        await recordUserActivity(
+          userId,
+          'challenge_completed',
+          `Solved challenge: ${challengeData.title || 'Coding Quest'} (+${xpReward} XP) ⭐`
+        )
+        await createUserNotification(
+          userId,
+          'Quest Conquered! ⭐',
+          `You solved all test cases for "${challengeData.title || 'Coding Quest'}" and earned ${xpReward} XP!`,
+          '🏆'
+        )
+        await syncUserBadgesAndAchievements(userId)
+      }
+    } catch (err) {
+      console.error('Error awarding challenge XP:', err)
+    }
+
+    // Complete lesson in lesson_progress and update enrollment
+    if (challengeData.course_id && challengeData.lesson_id) {
+      try {
+        await recordLessonCompletion(userId, challengeData.course_id, challengeData.lesson_id, true)
+      } catch (err) {
+        console.error('Error completing lesson:', err)
+      }
+    }
+  } else {
+    // Record attempt for failed submission without completing or awarding XP
+    try {
+      await recordChallengeSubmission(
+        userId,
+        exerciseId,
+        false,
+        totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0
+      )
+    } catch (err) {
+      console.error('Error updating challenge progress:', err)
     }
   }
 

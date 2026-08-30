@@ -17,6 +17,8 @@ export interface Challenge {
   order_index?: number
   hints?: string[]
   solution_explanation?: string
+  solution_code?: string
+  xp_reward?: number
   is_published: boolean
   created_at: string
 }
@@ -104,6 +106,7 @@ export async function fetchAdminChallenges(): Promise<Challenge[]> {
     const { data, error } = await supabase
       .from('challenges')
       .select('*')
+      .order('order_index', { ascending: true })
       .order('created_at', { ascending: true })
 
     if (error || !data) {
@@ -131,11 +134,14 @@ export async function createAdminChallenge(challengeData: Partial<Challenge>): P
       course_id: challengeData.course_id || null,
       lesson_id: challengeData.lesson_id || null,
       starter_code: challengeData.starter_code || '',
-      language: challengeData.language || 'javascript',
+      language: (challengeData.language || 'javascript').toLowerCase(),
       instructions: challengeData.instructions || challengeData.description || '',
       sample_input: challengeData.sample_input || '',
       hints: challengeData.hints || [],
       solution_explanation: challengeData.solution_explanation || null,
+      solution_code: challengeData.solution_code || '',
+      xp_reward: challengeData.xp_reward ?? 75,
+      order_index: challengeData.order_index ?? 0,
       is_published: challengeData.is_published ?? true,
     }
 
@@ -212,6 +218,19 @@ export async function deleteAdminChallenge(id: string): Promise<boolean> {
     return !error
   } catch (err) {
     console.error('Error deleting challenge:', err)
+    return false
+  }
+}
+
+export async function reorderChallenges(items: { id: string; order_index: number }[]): Promise<boolean> {
+  try {
+    await Promise.all(
+      items.map((item) =>
+        supabase.from('challenges').update({ order_index: item.order_index }).eq('id', item.id)
+      )
+    )
+    return true
+  } catch {
     return false
   }
 }

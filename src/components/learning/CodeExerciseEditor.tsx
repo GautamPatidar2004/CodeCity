@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
+import confetti from 'canvas-confetti'
 import { GamifiedButton } from '../ui/GamifiedButton'
 import { executeCode, type ExecutionResult } from '../../lib/execution'
 import {
@@ -146,6 +147,11 @@ export const CodeExerciseEditor: React.FC<CodeExerciseProps> = ({
       await loadHistory()
 
       if (subResult.status === 'passed') {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 },
+        })
         if (onSubmitAttempt) {
           onSubmitAttempt()
         }
@@ -271,7 +277,7 @@ export const CodeExerciseEditor: React.FC<CodeExerciseProps> = ({
 
       {/* Editor / Live Preview Section */}
       {isHtmlOrCss && activeTab === 'preview' ? (
-        <div className="h-64 w-full border-y border-slate-200 bg-white">
+        <div className="h-80 sm:h-96 w-full border-y border-slate-200 bg-white">
           <iframe
             title="Safe HTML/CSS Preview"
             srcDoc={code}
@@ -280,7 +286,7 @@ export const CodeExerciseEditor: React.FC<CodeExerciseProps> = ({
           />
         </div>
       ) : (
-        <div className="h-64 w-full border-y border-slate-200">
+        <div className="h-80 sm:h-96 w-full border-y border-slate-200">
           <Editor
             height="100%"
             language={monacoLanguage}
@@ -332,12 +338,12 @@ export const CodeExerciseEditor: React.FC<CodeExerciseProps> = ({
                 {submissionResult.status === 'passed' ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>ALL TESTS PASSED ({submissionResult.passedCount}/{submissionResult.totalCount})</span>
+                    <span>✓ {submissionResult.passedCount}/{submissionResult.totalCount} tests passed</span>
                   </>
                 ) : (
                   <>
                     <XCircle className="w-4 h-4 text-rose-600" />
-                    <span>SUBMISSION FAILED ({submissionResult.passedCount}/{submissionResult.totalCount} PASSED)</span>
+                    <span>✗ {submissionResult.passedCount}/{submissionResult.totalCount} tests passed</span>
                   </>
                 )}
               </div>
@@ -373,8 +379,9 @@ export const CodeExerciseEditor: React.FC<CodeExerciseProps> = ({
 
                   {!tr.isHidden && !tr.passed && (
                     <div className="text-[11px] text-slate-600 mt-1 pl-5 flex flex-col gap-0.5">
+                      {tr.input && <div><strong>Input:</strong> {tr.input}</div>}
                       {tr.expectedOutput && <div><strong>Expected:</strong> {tr.expectedOutput}</div>}
-                      {tr.actualOutput && <div><strong>Actual:</strong> {tr.actualOutput}</div>}
+                      {tr.actualOutput && <div><strong>Your Output:</strong> {tr.actualOutput}</div>}
                       {tr.error && <div className="text-rose-600"><strong>Error:</strong> {tr.error}</div>}
                     </div>
                   )}
