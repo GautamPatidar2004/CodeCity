@@ -2,13 +2,15 @@ import React, { useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AuthPage } from './pages/AuthPage'
 import { AppShell } from './components/layout/AppShell'
+import { AdminShell } from './components/layout/AdminShell'
 import { GameToaster } from './components/ui/GameToast'
 import { CodeQuestOnboardingFlow } from './components/onboarding/CodeQuestOnboardingFlow'
 import { Loader2 } from 'lucide-react'
 
 const MainApp: React.FC = () => {
-  const { user, loading } = useAuth()
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(false)
+  const { user, loading, isAdmin } = useAuth()
+  const [showPreviewOnboarding, setShowPreviewOnboarding] = useState<boolean>(false)
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(false)
 
   // 1. Loading State
   if (loading) {
@@ -29,10 +31,10 @@ const MainApp: React.FC = () => {
   if (!user) {
     return (
       <>
-        <AuthPage onOpenOnboarding={() => setShowOnboarding(true)} />
-        {showOnboarding && (
+        <AuthPage onOpenOnboarding={() => setShowPreviewOnboarding(true)} />
+        {showPreviewOnboarding && (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
-            <CodeQuestOnboardingFlow onComplete={() => setShowOnboarding(false)} />
+            <CodeQuestOnboardingFlow onComplete={() => setShowPreviewOnboarding(false)} />
           </div>
         )}
         <GameToaster />
@@ -40,7 +42,25 @@ const MainApp: React.FC = () => {
     )
   }
 
-  // 3. Authenticated -> Global App Shell Framework
+  // 3. Authenticated -> Check Onboarding for Students
+  const hasOnboarded = localStorage.getItem(`onboarded_${user.id}`) === 'true' || hasCompletedOnboarding
+  
+  if (!hasOnboarded && !isAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
+        <CodeQuestOnboardingFlow onComplete={() => {
+          localStorage.setItem(`onboarded_${user.id}`, 'true')
+          setHasCompletedOnboarding(true)
+        }} />
+      </div>
+    )
+  }
+
+  // 4. Global App Shell Framework
+  if (isAdmin) {
+    return <AdminShell />
+  }
+  
   return <AppShell />
 }
 

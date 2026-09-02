@@ -17,13 +17,14 @@ import {
   Sparkles,
   HelpCircle,
   MessageSquare,
+  Camera,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import type { DashboardMode } from './TopHeader'
 
 export const AppShell: React.FC = () => {
-  const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState<NavItemKey>('dashboard')
+  const { user, isAdmin } = useAuth()
+  const [activeTab, setActiveTab] = useState<NavItemKey>(isAdmin ? 'admin' : 'dashboard')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('headquarters')
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
@@ -47,6 +48,7 @@ export const AppShell: React.FC = () => {
             setSelectedCourseId('python')
           }}
           userMode={isLevel1 ? 'level1' : 'level12'}
+          isAdmin={isAdmin}
         />
       </div>
 
@@ -144,23 +146,35 @@ export const AppShell: React.FC = () => {
           {activeTab === 'settings' && (
             <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 text-left animate-in fade-in pb-12">
               <div className="p-6 bg-white rounded-3xl border border-[#ece7df] shadow-xs flex flex-col sm:flex-row items-center gap-6">
-                <AlexPixelAvatar size={72} />
+                <div className="relative group cursor-pointer">
+                  <AlexPixelAvatar size={72} />
+                  <div className="absolute inset-0 bg-stone-900/60 rounded-xl hidden group-hover:flex flex-col items-center justify-center transition-all animate-in fade-in">
+                    <Camera className="w-5 h-5 text-white mb-0.5" />
+                    <span className="text-[9px] font-bold text-white uppercase font-pixel text-center leading-tight">Edit<br/>Avatar</span>
+                  </div>
+                </div>
                 <div className="flex-1 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                    <h2 className="text-2xl font-black text-stone-900">Alex Morgan</h2>
+                    <h2 className="text-2xl font-black text-stone-900">{user?.user_metadata?.full_name || 'Alex Morgan'}</h2>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-pixel font-bold">
                       LVL 12
                     </span>
                   </div>
                   <p className="text-xs text-stone-500 font-medium">
-                    {user?.email || 'alex.morgan@codingconflicts.dev'} • Joined Coding Conflicts Adventure
+                    @{user?.user_metadata?.username || 'alex_dev'} • {user?.email || 'alex.morgan@codingconflicts.dev'}
                   </p>
-                  <div className="flex items-center justify-center sm:justify-start gap-3 mt-3">
+                  <p className="text-xs text-stone-600 mt-2 italic">
+                    "Passionate adventurer in the world of code. Learning Python and preparing to build full-stack web apps!"
+                  </p>
+                  <div className="flex items-center justify-center sm:justify-start gap-3 mt-3 flex-wrap">
                     <span className="px-3 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono">
                       ⭐ 4,850 XP
                     </span>
                     <span className="px-3 py-1 rounded-xl bg-orange-50 text-orange-800 border border-orange-200 text-xs font-bold font-mono">
                       🔥 7 Day Streak
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 text-xs font-bold font-mono">
+                      ⚔️ 14 Quests Done
                     </span>
                   </div>
                 </div>
@@ -174,8 +188,24 @@ export const AppShell: React.FC = () => {
                     <label className="font-bold text-stone-700">Display Name</label>
                     <input
                       type="text"
-                      defaultValue="Alex Morgan"
-                      className="h-11 px-3.5 rounded-xl border border-stone-200 bg-stone-50 font-medium text-stone-900 focus:outline-none focus:border-emerald-500 focus:bg-white"
+                      defaultValue={user?.user_metadata?.full_name || 'Alex Morgan'}
+                      className="h-11 px-3.5 rounded-xl border border-stone-200 bg-stone-50 font-medium text-stone-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-colors"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-stone-700">Username</label>
+                    <input
+                      type="text"
+                      defaultValue={user?.user_metadata?.username || 'alex_dev'}
+                      className="h-11 px-3.5 rounded-xl border border-stone-200 bg-stone-50 font-medium text-stone-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-colors"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <label className="font-bold text-stone-700">Bio</label>
+                    <textarea
+                      rows={3}
+                      defaultValue="Passionate adventurer in the world of code. Learning Python and preparing to build full-stack web apps!"
+                      className="p-3.5 rounded-xl border border-stone-200 bg-stone-50 font-medium text-stone-900 focus:outline-none focus:border-emerald-500 focus:bg-white resize-none transition-colors"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
