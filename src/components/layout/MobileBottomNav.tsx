@@ -4,6 +4,7 @@ import {
   BookOpen,
   Code2,
   Layers,
+  Gamepad2,
   User,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -23,6 +24,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     { key: 'learn' as NavItemKey, label: 'Learn', icon: BookOpen },
     { key: 'practice' as NavItemKey, label: 'Practice', icon: Code2 },
     { key: 'build' as NavItemKey, label: 'Build', icon: Layers },
+    { key: 'arcade' as NavItemKey, label: 'Arcade', icon: Gamepad2 },
     { key: 'settings' as NavItemKey, label: 'Profile', icon: User },
   ]
 

@@ -11,6 +11,7 @@ import { CourseDetailView } from '../learn/CourseDetailView'
 import { QuestsPage } from '../../pages/QuestsPage'
 import { ProjectsPage } from '../../pages/ProjectsPage'
 import { CommunityPage } from '../../pages/CommunityPage'
+import { TeamArcadePage } from '../../pages/TeamArcadePage'
 import { GameToaster } from '../ui/GameToast'
 import { AlexPixelAvatar } from '../brand/PixelArtAvatars'
 import {
@@ -140,6 +141,8 @@ export const AppShell: React.FC = () => {
           {activeTab === 'practice' && <QuestsPage />}
 
           {activeTab === 'build' && <ProjectsPage />}
+
+          {activeTab === 'arcade' && <TeamArcadePage />}
 
           {activeTab === 'community' && <CommunityPage />}
 

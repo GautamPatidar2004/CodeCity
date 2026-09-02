@@ -14,6 +14,8 @@ import {
   Layers,
   Users,
   CheckCircle2,
+  Gamepad2,
+  ShieldCheck,
 } from 'lucide-react'
 import { AlexPixelAvatar, LumiPixelBot } from '../brand/PixelArtAvatars'
 import { useAuth } from '../../context/AuthContext'
@@ -50,9 +52,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     learn: { title: 'Learn', icon: <BookOpen className="w-4 h-4 text-emerald-600" /> },
     practice: { title: 'Practice', icon: <Code2 className="w-4 h-4 text-purple-600" /> },
     build: { title: 'Build', icon: <Layers className="w-4 h-4 text-amber-600" /> },
+    arcade: { title: 'Team Arcade', icon: <Gamepad2 className="w-4 h-4 text-emerald-600" /> },
     community: { title: 'Community', icon: <Users className="w-4 h-4 text-purple-600" /> },
     settings: { title: 'Settings', icon: <Settings className="w-4 h-4 text-stone-600" /> },
     help: { title: 'Help & Support', icon: <Bot className="w-4 h-4 text-emerald-600" /> },
+    admin: { title: 'Admin Realm', icon: <ShieldCheck className="w-4 h-4 text-purple-600" /> },
   }
 
   const currentTabInfo = tabTitles[activeTab] || tabTitles.dashboard

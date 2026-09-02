@@ -11,12 +11,13 @@ import {
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
+  Gamepad2,
 } from 'lucide-react'
 import { CodingConflictsLogo } from '../brand/CodingConflictsLogo'
 import { AlexPixelAvatar, PixelPythonIcon } from '../brand/PixelArtAvatars'
 import { cn } from '../../lib/utils'
 
-export type NavItemKey = 'dashboard' | 'learn' | 'practice' | 'build' | 'community' | 'settings' | 'help'
+export type NavItemKey = 'dashboard' | 'learn' | 'practice' | 'build' | 'arcade' | 'community' | 'settings' | 'help' | 'admin'
 
 interface SidebarProps {
   activeTab: NavItemKey
@@ -25,6 +26,7 @@ interface SidebarProps {
   onToggleCollapse?: () => void
   onContinueQuest?: () => void
   userMode?: 'level1' | 'level12'
+  isAdmin?: boolean
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { key: 'learn' as NavItemKey, label: 'Learn', icon: BookOpen },
     { key: 'practice' as NavItemKey, label: 'Practice', icon: Code2 },
     { key: 'build' as NavItemKey, label: 'Build', icon: Layers },
+    { key: 'arcade' as NavItemKey, label: 'Team Arcade', icon: Gamepad2 },
     { key: 'community' as NavItemKey, label: 'Community', icon: Users },
   ]
 
