@@ -16,12 +16,14 @@ import {
 interface CourseDetailViewProps {
   onBackToCourses: () => void
   onStartQuest?: () => void
+  onSelectLesson?: (lessonId: string) => void
   onOpenLumi?: () => void
 }
 
 export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
   onBackToCourses,
   onStartQuest,
+  onSelectLesson,
   onOpenLumi,
 }) => {
   return (
@@ -337,10 +339,14 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
                     <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
                     <span>Lesson 02 — for Loops</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-emerald-800 font-bold bg-white p-1.5 rounded-lg border border-emerald-200 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => onSelectLesson?.('ch4-lesson3')}
+                    className="w-full flex items-center gap-1.5 text-emerald-800 font-bold bg-white p-1.5 rounded-lg border border-emerald-200 shadow-2xs hover:border-emerald-400 hover:bg-emerald-50/60 transition-all text-left cursor-pointer"
+                  >
                     <ArrowRight className="w-3 h-3 text-emerald-600" />
                     <span>Lesson 03 — while Loops</span>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-1.5 text-stone-400">
                     <span className="w-3 h-3 rounded-full border border-stone-300 inline-block shrink-0" />
                     <span>Lesson 04 — Loop Challenge</span>
@@ -355,7 +361,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
 
                   <button
                     type="button"
-                    onClick={onStartQuest}
+                    onClick={() => onSelectLesson ? onSelectLesson('ch4-lesson3') : onStartQuest?.()}
                     className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1"
                   >
                     <span>Continue Chapter</span>
