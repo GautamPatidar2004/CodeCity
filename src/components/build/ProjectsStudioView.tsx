@@ -12,11 +12,15 @@ import {
   Lock,
   Share2,
   Crown,
+  Compass,
+  Layers,
 } from 'lucide-react'
 import { LumiPixelBot, AlexPixelAvatar } from '../brand/PixelArtAvatars'
+import { StudentGuidedProjectsLibrary } from '../guidedProjects/StudentGuidedProjectsLibrary'
 
 interface ProjectsStudioViewProps {
   onNewProject?: () => void
+  onSelectGuidedProject?: (projectId: string) => void
 }
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
@@ -318,7 +322,11 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
 }
 
 /* ─── Main Component ─────────────────────────────────────────────────────────── */
-export const ProjectsStudioView: React.FC<ProjectsStudioViewProps> = ({ onNewProject }) => {
+export const ProjectsStudioView: React.FC<ProjectsStudioViewProps> = ({
+  onNewProject,
+  onSelectGuidedProject,
+}) => {
+  const [studioMode, setStudioMode] = useState<'guided' | 'freeform'>('guided')
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [langOpen, setLangOpen] = useState(false)
@@ -335,6 +343,40 @@ export const ProjectsStudioView: React.FC<ProjectsStudioViewProps> = ({ onNewPro
 
   return (
     <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-6 text-left pb-16 font-sans select-none animate-in fade-in duration-300">
+      {/* Studio Navigation Switcher */}
+      <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl w-fit border border-[#ece7df] shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setStudioMode('guided')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-pixel uppercase font-bold transition-all cursor-pointer ${
+            studioMode === 'guided'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Compass className="w-3.5 h-3.5" />
+          <span>Guided Projects</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStudioMode('freeform')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-pixel uppercase font-bold transition-all cursor-pointer ${
+            studioMode === 'freeform'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>Freeform Studio</span>
+        </button>
+      </div>
+
+      {studioMode === 'guided' ? (
+        <StudentGuidedProjectsLibrary
+          onSelectProject={(id) => onSelectGuidedProject?.(id)}
+        />
+      ) : (
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
 
         {/* ============================================================ */}
@@ -740,6 +782,7 @@ export const ProjectsStudioView: React.FC<ProjectsStudioViewProps> = ({ onNewPro
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

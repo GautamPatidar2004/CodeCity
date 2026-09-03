@@ -1,13 +1,21 @@
 import React, { useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import { useTeamArcade, useArcadeFests, useStudentFestHistory, type ArcadeFest } from '../lib/arcade'
+import {
+  useTeamArcade,
+  useArcadeFests,
+  useStudentFestHistory,
+  useStudentBattles,
+  registerBattleAction,
+  type ArcadeFest,
+} from '../lib/arcade'
 import { GamifiedCard } from '../components/ui/GamifiedCard'
 import { GamifiedButton } from '../components/ui/GamifiedButton'
 import { GamifiedInput } from '../components/ui/GamifiedInput'
 import { AlexPixelAvatar } from '../components/brand/PixelArtAvatars'
 import { showQuestToast } from '../components/ui/GameToast'
 import { FestLobbyView } from '../components/arcade/FestLobbyView'
+import { BattleLobbyView } from '../components/arcade/BattleLobbyView'
 import confetti from 'canvas-confetti'
 import {
   Gamepad2,
@@ -70,6 +78,38 @@ export const TeamArcadePage: React.FC = () => {
     upcomingFests,
     endedFests,
   } = useArcadeFests()
+
+  const {
+    battles,
+    registeredBattleIds,
+    refreshBattles,
+  } = useStudentBattles(user?.id)
+
+  const [activeArcadeTab, setActiveArcadeTab] = useState<'battles' | 'fests'>('battles')
+  const [activeBattleTab, setActiveBattleTab] = useState<'all' | 'live' | 'upcoming' | 'ended'>('all')
+  const [activeLobbyBattleId, setActiveLobbyBattleId] = useState<string | null>(null)
+  const [isRegisteringBattle, setIsRegisteringBattle] = useState(false)
+
+  const handleRegisterBattle = async (battleId: string) => {
+    if (!user?.id) {
+      toast.error('Please log in to register.')
+      return
+    }
+    setIsRegisteringBattle(true)
+    const result = await registerBattleAction(battleId, user.id)
+    setIsRegisteringBattle(false)
+
+    if (!result.success) {
+      toast.error(result.error || 'Failed to register squad.')
+    } else {
+      showQuestToast({
+        title: `Squad Registered for ${result.battle_title || 'Battle'}! ⚔️`,
+        variant: 'complete',
+      })
+      confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } })
+      refreshBattles()
+    }
+  }
 
   const [activeFestTab, setActiveFestTab] = useState<'all' | 'live' | 'upcoming' | 'ended'>('all')
   const [selectedFest, setSelectedFest] = useState<ArcadeFest | null>(null)
@@ -189,6 +229,16 @@ export const TeamArcadePage: React.FC = () => {
     )
   }
 
+  if (activeLobbyBattleId) {
+    return (
+      <BattleLobbyView
+        battleId={activeLobbyBattleId}
+        userId={user?.id}
+        onExit={() => setActiveLobbyBattleId(null)}
+      />
+    )
+  }
+
   if (activeLobbyFest) {
     return (
       <FestLobbyView
@@ -200,6 +250,17 @@ export const TeamArcadePage: React.FC = () => {
       />
     )
   }
+
+  const liveBattles = battles.filter((b) => b.effective_status === 'live')
+  const upcomingBattles = battles.filter((b) => b.effective_status === 'upcoming')
+  const endedBattles = battles.filter((b) => b.effective_status === 'ended')
+
+  const displayedBattles = battles.filter((b) => {
+    if (activeBattleTab === 'live') return b.effective_status === 'live'
+    if (activeBattleTab === 'upcoming') return b.effective_status === 'upcoming'
+    if (activeBattleTab === 'ended') return b.effective_status === 'ended'
+    return true
+  })
 
   const displayedFests = fests.filter((f) => {
     if (activeFestTab === 'live') return f.effective_status === 'live'
@@ -215,18 +276,273 @@ export const TeamArcadePage: React.FC = () => {
         <div className="relative z-10 flex flex-col gap-2 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-400/40 text-[10px] font-pixel uppercase font-bold text-emerald-200 w-fit">
             <Swords className="w-3.5 h-3.5" />
-            <span>Team Arcade • Fest Arena</span>
+            <span>Team Arcade • Competitive Arena</span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-black font-sans tracking-tight">
             Team Arcade Arena
           </h1>
           <p className="text-xs sm:text-sm text-emerald-100 font-sans leading-relaxed">
-            Form 4-player squads, track scheduled competitive coding fests, and collaborate with your teammates to conquer challenges.
+            Form 4-player squads, register for upcoming competitive coding battles, and join the pre-match lobby to conquer ordered quests together.
           </p>
         </div>
       </div>
 
-      {/* 2. FEST DISCOVERY SECTION */}
+      {/* SECTION SWITCHER: BATTLES VS FESTS */}
+      <div className="flex items-center gap-2 p-1.5 bg-stone-200/80 rounded-2xl w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveArcadeTab('battles')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-pixel uppercase font-bold transition-all cursor-pointer ${
+            activeArcadeTab === 'battles'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-300/60'
+          }`}
+        >
+          <Swords className="w-4 h-4" />
+          <span>Competitive Battles ({battles.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveArcadeTab('fests')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-pixel uppercase font-bold transition-all cursor-pointer ${
+            activeArcadeTab === 'fests'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-300/60'
+          }`}
+        >
+          <Flame className="w-4 h-4" />
+          <span>Coding Fests ({fests.length})</span>
+        </button>
+      </div>
+
+      {/* 2A. BATTLES DISCOVERY SECTION */}
+      {activeArcadeTab === 'battles' && (
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-3">
+            <div className="flex items-center gap-2.5">
+              <Swords className="w-5 h-5 text-purple-600" />
+              <h2 className="text-lg font-black text-stone-900 font-sans tracking-tight">
+                Competitive Battles
+              </h2>
+              <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-pixel text-[9px] font-bold">
+                {liveBattles.length} LIVE
+              </span>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <button
+                type="button"
+                onClick={() => setActiveBattleTab('all')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeBattleTab === 'all'
+                    ? 'bg-purple-900 text-white shadow-xs'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                All ({battles.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveBattleTab('live')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeBattleTab === 'live'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live ({liveBattles.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveBattleTab('upcoming')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeBattleTab === 'upcoming'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                }`}
+              >
+                Upcoming ({upcomingBattles.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveBattleTab('ended')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeBattleTab === 'ended'
+                    ? 'bg-stone-700 text-white shadow-xs'
+                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                }`}
+              >
+                Concluded ({endedBattles.length})
+              </button>
+            </div>
+          </div>
+
+          {/* Battles Grid */}
+          {displayedBattles.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-3xl border border-stone-200 flex flex-col items-center justify-center gap-2">
+              <Swords className="w-8 h-8 text-stone-300" />
+              <div className="font-pixel text-xs text-stone-500 uppercase">No Battles Found</div>
+              <p className="text-xs text-stone-400">There are no published battles matching your filter right now.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {displayedBattles.map((battle) => {
+                const isLive = battle.effective_status === 'live'
+                const isUpcoming = battle.effective_status === 'upcoming'
+                const isRegistered = registeredBattleIds.includes(battle.id)
+
+                return (
+                  <GamifiedCard
+                    key={battle.id}
+                    accentColor={isLive ? 'emerald' : isUpcoming ? 'purple' : 'blue'}
+                    className="p-5 flex flex-col justify-between gap-5 relative bg-white"
+                  >
+                    <div className="flex flex-col gap-3">
+                      {/* Status Header */}
+                      <div className="flex items-center justify-between flex-wrap gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {isLive && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-pixel text-[9px] font-bold uppercase">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                              LIVE ARENA
+                            </span>
+                          )}
+                          {isUpcoming && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-blue-800 font-pixel text-[9px] font-bold uppercase">
+                              <Clock className="w-3 h-3 text-blue-600" />
+                              UPCOMING
+                            </span>
+                          )}
+                          {!isLive && !isUpcoming && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-stone-100 border border-stone-300 text-stone-600 font-pixel text-[9px] font-bold uppercase">
+                              <CheckCircle2 className="w-3 h-3 text-stone-500" />
+                              CONCLUDED
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-mono font-bold border border-purple-100">
+                            {battle.exercise_count ?? 0} Quests
+                          </span>
+                        </div>
+
+                        {isRegistered && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-pixel text-[9px] font-bold uppercase">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            REGISTERED
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="font-bold text-base text-stone-900 font-sans tracking-tight">
+                        {battle.title}
+                      </h3>
+
+                      {battle.description && (
+                        <p className="text-xs text-stone-600 line-clamp-3 leading-relaxed">
+                          {battle.description}
+                        </p>
+                      )}
+
+                      {/* Scoring System Pills */}
+                      <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono pt-1">
+                        <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-bold border border-purple-100">
+                          +{battle.base_points} Base
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-bold border border-amber-100">
+                          +{battle.speed_bonus_max} Speed
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-bold border border-rose-100">
+                          -{battle.wrong_answer_penalty} Penalty
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 pt-3 border-t border-stone-100">
+                      <div className="flex flex-col gap-1 text-[11px] font-mono text-stone-500">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                          <span>Starts: {formatFestDate(battle.start_time)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                          <span>Duration: {battle.duration_minutes} Minutes</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isLive && isRegistered && (
+                          <GamifiedButton
+                            variant="primary"
+                            size="sm"
+                            onClick={() => setActiveLobbyBattleId(battle.id)}
+                            className="w-full flex items-center justify-center gap-1.5 font-bold text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                          >
+                            <Swords className="w-3.5 h-3.5" />
+                            <span>Enter Live Arena</span>
+                          </GamifiedButton>
+                        )}
+
+                        {isUpcoming && isRegistered && (
+                          <GamifiedButton
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setActiveLobbyBattleId(battle.id)}
+                            className="w-full flex items-center justify-center gap-1.5 font-bold text-[11px] cursor-pointer"
+                          >
+                            <Clock className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Enter Battle Lobby</span>
+                          </GamifiedButton>
+                        )}
+
+                        {isUpcoming && !isRegistered && (
+                          <GamifiedButton
+                            variant="primary"
+                            size="sm"
+                            disabled={!team || !isCaptain || isRegisteringBattle}
+                            onClick={() => handleRegisterBattle(battle.id)}
+                            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold cursor-pointer"
+                            title={
+                              !team
+                                ? 'Active squad required'
+                                : !isCaptain
+                                ? 'Only captain can register'
+                                : 'Register squad'
+                            }
+                          >
+                            {isRegisteringBattle
+                              ? 'Registering...'
+                              : !team
+                              ? 'Squad Required'
+                              : isCaptain
+                              ? 'Register Squad'
+                              : 'Captain Only'}
+                          </GamifiedButton>
+                        )}
+
+                        {!isUpcoming && !isLive && (
+                          <GamifiedButton
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setActiveLobbyBattleId(battle.id)}
+                            className="w-full flex items-center justify-center gap-1.5 text-xs"
+                          >
+                            <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                            <span>View Final Results</span>
+                          </GamifiedButton>
+                        )}
+                      </div>
+                    </div>
+                  </GamifiedCard>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2B. FEST DISCOVERY SECTION */}
+      {activeArcadeTab === 'fests' && (
       <div className="flex flex-col gap-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-3">
           <div className="flex items-center gap-2.5">
@@ -415,6 +731,7 @@ export const TeamArcadePage: React.FC = () => {
           })}
         </div>
       </div>
+      )}
 
       {/* 3. SQUAD HEADQUARTERS & MEMBERSHIP SECTION */}
       <div className="flex flex-col gap-5 pt-4 border-t border-stone-200">

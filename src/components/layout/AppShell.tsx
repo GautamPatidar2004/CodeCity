@@ -15,6 +15,7 @@ import { PracticeArenaView } from '../practice/PracticeArenaView'
 import { ChallengeBriefingView } from '../practice/ChallengeBriefingView'
 import { ProjectsStudioView } from '../build/ProjectsStudioView'
 import { ProjectIDEView, ProjectIDERightPanel } from '../build/ProjectIDEView'
+import { GuidedProjectBuilderWorkspace } from '../guidedProjects/GuidedProjectBuilderWorkspace'
 import { CommunityPage } from '../../pages/CommunityPage'
 import { TeamArcadePage } from '../../pages/TeamArcadePage'
 import { GameToaster } from '../ui/GameToast'
@@ -39,6 +40,7 @@ export const AppShell: React.FC = () => {
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null)
   const [practiceBriefingId, setPracticeBriefingId] = useState<string | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedGuidedProjectId, setSelectedGuidedProjectId] = useState<string | null>(null)
   const [buildTasks, setBuildTasks] = useState([
     { label: 'Create hero section', xp: 25, done: true },
     { label: 'Add navigation', xp: 25, done: true },
@@ -225,7 +227,12 @@ export const AppShell: React.FC = () => {
           )}
 
           {activeTab === 'build' && (
-            selectedProjectId ? (
+            selectedGuidedProjectId ? (
+              <GuidedProjectBuilderWorkspace
+                projectId={selectedGuidedProjectId}
+                onBack={() => setSelectedGuidedProjectId(null)}
+              />
+            ) : selectedProjectId ? (
               <div className="grid grid-cols-12 gap-5 items-start">
                 <div className="col-span-9">
                   <ProjectIDEView onBack={() => setSelectedProjectId(null)} />
@@ -238,7 +245,10 @@ export const AppShell: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <ProjectsStudioView onNewProject={() => setSelectedProjectId('portfolio')} />
+              <ProjectsStudioView
+                onNewProject={() => setSelectedProjectId('portfolio')}
+                onSelectGuidedProject={(id) => setSelectedGuidedProjectId(id)}
+              />
             )
           )}
 
