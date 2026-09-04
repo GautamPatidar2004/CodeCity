@@ -1,31 +1,48 @@
-import React from 'react'
+import * as React from "react"
+import { cn } from "../../lib/utils"
 
-export interface GamifiedCardProps extends React.HTMLAttributes<HTMLDivElement> {
-  accentColor?: 'emerald' | 'amber' | 'purple' | 'blue' | 'rose' | 'none'
-  children: React.ReactNode
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  glow?: "cyan" | "emerald" | "amber" | "purple" | "none"
+  accentColor?: "emerald" | "amber" | "purple" | "blue" | "rose" | string
+  bordered?: boolean
 }
 
-export const GamifiedCard: React.FC<GamifiedCardProps> = ({
-  accentColor = 'none',
-  className = '',
-  children,
-  ...props
-}) => {
-  const accentClasses = {
-    none: 'border border-slate-100 shadow-[0_12px_30px_rgba(15,23,42,0.06)]',
-    emerald: 'border-2 border-slate-100 border-l-8 border-l-emerald-500 shadow-[0_12px_30px_rgba(16,185,129,0.1)]',
-    amber: 'border-2 border-slate-100 border-l-8 border-l-amber-500 shadow-[0_12px_30px_rgba(245,158,11,0.1)]',
-    purple: 'border-2 border-slate-100 border-l-8 border-l-purple-500 shadow-[0_12px_30px_rgba(168,85,247,0.1)]',
-    blue: 'border-2 border-slate-100 border-l-8 border-l-blue-500 shadow-[0_12px_30px_rgba(59,130,246,0.1)]',
-    rose: 'border-2 border-slate-100 border-l-8 border-l-rose-500 shadow-[0_12px_30px_rgba(244,63,94,0.1)]',
+const GamifiedCard = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, glow = "none", accentColor, bordered = true, ...props }, ref) => {
+    const glowStyles = {
+      none: "",
+      cyan: "shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:shadow-[0_12px_40px_rgba(56,189,248,0.25)]",
+      emerald: "shadow-[0_8px_30px_rgba(16,185,129,0.15)] hover:shadow-[0_12px_40px_rgba(16,185,129,0.25)]",
+      amber: "shadow-[0_8px_30px_rgba(245,158,11,0.15)] hover:shadow-[0_12px_40px_rgba(245,158,11,0.25)]",
+      purple: "shadow-[0_8px_30px_rgba(168,85,247,0.15)] hover:shadow-[0_12px_40px_rgba(168,85,247,0.25)]",
+    }
+
+    const accentStyles: Record<string, string> = {
+      emerald: "border-l-4 border-l-emerald-500",
+      amber: "border-l-4 border-l-amber-500",
+      purple: "border-l-4 border-l-purple-500",
+      blue: "border-l-4 border-l-blue-500",
+      rose: "border-l-4 border-l-rose-500",
+    }
+
+    const accentClass = accentColor ? (accentStyles[accentColor] || "border-l-4 border-l-emerald-500") : ""
+
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "rounded-3xl bg-white text-slate-900 shadow-sm transition-all",
+          bordered && "border border-slate-100",
+          glowStyles[glow],
+          accentClass,
+          className
+        )}
+        {...props}
+      />
+    )
   }
+)
+GamifiedCard.displayName = "GamifiedCard"
 
-  return (
-    <div
-      className={`bg-white rounded-2xl p-6 transition-all duration-200 ${accentClasses[accentColor]} ${className}`}
-      {...props}
-    >
-      {children}
-    </div>
-  )
-}
+export { GamifiedCard }
+export default GamifiedCard

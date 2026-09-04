@@ -1,48 +1,57 @@
-import React from 'react'
+import * as React from "react"
+import { motion } from "framer-motion"
+import { cn } from "../../lib/utils"
 
-export interface GamifiedButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'accent' | 'outline' | 'danger' | 'amber'
-  size?: 'sm' | 'md' | 'lg'
-  children: React.ReactNode
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary" | "warning" | "ghost" | "outline" | "danger"
+  size?: "sm" | "md" | "lg"
+  shimmer?: boolean
 }
 
-export const GamifiedButton: React.FC<GamifiedButtonProps> = ({
-  variant = 'secondary',
-  size = 'md',
-  className = '',
-  children,
-  ...props
-}) => {
-  const baseStyles =
-    'relative inline-flex items-center justify-center font-pixel text-center uppercase tracking-wider transition-all duration-150 rounded-xl cursor-pointer select-none active:translate-y-1 active:border-b-0 focus:outline-none disabled:opacity-50 disabled:pointer-events-none'
+const GamifiedButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "primary", size = "md", shimmer = false, children, ...props }, ref) => {
+    const baseStyles =
+      "relative inline-flex items-center justify-center font-pixel uppercase tracking-wider " +
+      "disabled:opacity-50 disabled:pointer-events-none rounded-2xl overflow-hidden select-none cursor-pointer font-bold transition-all"
 
-  const sizeStyles = {
-    sm: 'text-[9px] px-3 py-2 border-b-[3px]',
-    md: 'text-[11px] px-5 py-3 border-b-4',
-    lg: 'text-[13px] px-6 py-4 border-b-4',
+    const sizeStyles: Record<string, string> = {
+      sm: "h-9  px-4 text-[9px]  border-b-2 active:border-b-0 active:translate-y-0.5",
+      md: "h-12 px-6 text-[11px] border-b-4 active:border-b-1 active:translate-y-1",
+      lg: "h-14 px-8 text-[13px] border-b-[6px] active:border-b-2 active:translate-y-1.5",
+    }
+
+    const variantStyles: Record<string, string> = {
+      primary:   "bg-[#1cb0f6] text-white border-[#1899d6] hover:bg-[#1899d6]",
+      secondary: "bg-[#58cc02] text-white border-[#58a700] hover:bg-[#46a302] hover:border-[#46a302]",
+      warning:   "bg-[#ffc800] text-white border-[#e5b400] hover:bg-[#e5b400]",
+      danger:    "bg-[#ff4b4b] text-white border-[#cc3333] hover:bg-[#e03a3a]",
+      ghost:     "bg-transparent text-slate-800 border-transparent hover:bg-slate-100",
+      outline:   "bg-white text-slate-700 border-[#e5e5e5] border-2 hover:bg-slate-50",
+    }
+
+    return (
+      <motion.button
+        ref={ref}
+        whileTap={{ y: variant === "ghost" ? 0 : 2, scaleX: 0.98 }}
+        whileHover={{ y: -1 }}
+        transition={{ type: "spring", stiffness: 600, damping: 28 }}
+        className={cn(baseStyles, sizeStyles[size], variantStyles[variant], className)}
+        {...(props as any)}
+      >
+        {shimmer && (
+          <motion.span
+            className="pointer-events-none absolute inset-0 -skew-x-12 bg-white/20"
+            initial={{ x: "-120%" }}
+            whileHover={{ x: "120%" }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+          />
+        )}
+        {children}
+      </motion.button>
+    )
   }
+)
+GamifiedButton.displayName = "GamifiedButton"
 
-  const variantStyles = {
-    primary:
-      'bg-amber-400 text-slate-900 border-amber-600 hover:bg-amber-300 shadow-[0_4px_12px_rgba(251,191,36,0.35)]',
-    secondary:
-      'bg-emerald-500 text-white border-emerald-700 hover:bg-emerald-400 shadow-[0_4px_12px_rgba(16,185,129,0.35)]',
-    accent:
-      'bg-purple-600 text-white border-purple-800 hover:bg-purple-500 shadow-[0_4px_12px_rgba(147,51,234,0.35)]',
-    amber:
-      'bg-amber-500 text-white border-amber-700 hover:bg-amber-400 shadow-[0_4px_12px_rgba(245,158,11,0.35)]',
-    danger:
-      'bg-rose-500 text-white border-rose-700 hover:bg-rose-400 shadow-[0_4px_12px_rgba(244,63,94,0.35)]',
-    outline:
-      'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 shadow-sm border-2 border-b-4',
-  }
-
-  return (
-    <button
-      className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
-      {...props}
-    >
-      {children}
-    </button>
-  )
-}
+export { GamifiedButton }
+export default GamifiedButton

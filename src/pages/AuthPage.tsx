@@ -4,101 +4,132 @@ import { CodeQuestRegisterCard } from '../components/auth/CodeQuestRegisterCard'
 import { CodeQuestForgotPasswordCard } from '../components/auth/CodeQuestForgotPasswordCard'
 import { CodeQuestRpgScene } from '../components/auth/CodeQuestRpgScene'
 import { CodeQuestTrailheadScene } from '../components/auth/CodeQuestTrailheadScene'
+import { CodeQuestLogo } from '../components/brand/CodeQuestLogo'
+import { Wand2 } from 'lucide-react'
 
 export type AuthView = 'login' | 'register' | 'forgot-password'
 
-export const AuthPage: React.FC = () => {
+interface AuthPageProps {
+  onOpenOnboarding?: () => void
+}
+
+export const AuthPage: React.FC<AuthPageProps> = ({ onOpenOnboarding }) => {
   const [authView, setAuthView] = useState<AuthView>('login')
 
+  const bgImage =
+    authView === 'login'
+      ? '/codequest_onboarding_bg.jpg'
+      : authView === 'register'
+      ? '/codequest_onboarding_bg.jpg'
+      : '/codequest_onboarding_bg.jpg'
+
   return (
-    <div className="min-h-screen w-full bg-[#f8fafc] text-slate-900 flex flex-col justify-between p-4 sm:p-6 lg:p-10 font-sans selection:bg-emerald-500 selection:text-white">
-      {/* Top Header Branding */}
-      <header className="w-full max-w-7xl mx-auto flex items-center justify-between mb-6 lg:mb-8">
-        <div className="flex items-center gap-3 group rounded-lg p-1 select-none">
-          {/* Terminal Icon `>_` with Sparks */}
-          <div className="relative flex items-center justify-center">
-            <div className="h-10 w-10 bg-emerald-600 border-2 border-b-4 border-emerald-700 rounded-2xl flex items-center justify-center text-white font-mono font-black text-base shadow-md group-hover:scale-105 transition-transform">
-              &gt;_
-            </div>
-            {/* Ambient Sparkles */}
-            <span className="absolute -top-2 -right-2 text-amber-400 text-xs animate-twinkle select-none">
-              ✦
-            </span>
-          </div>
+    <div className="relative min-h-screen w-full bg-[#f4f8f0] text-slate-900 flex flex-col justify-between overflow-x-hidden font-sans selection:bg-emerald-500 selection:text-white">
+      {/* ===== RPG Island Background Scenery ===== */}
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+        <img
+          src={bgImage}
+          alt=""
+          className="w-full h-full object-cover object-center pixelated transition-all duration-700"
+        />
+        {/* Very light center vignette — keeps the pixel island scenery visible at edges */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_55%_65%_at_center,_rgba(244,248,240,0.82)_0%,_rgba(244,248,240,0.5)_55%,_rgba(244,248,240,0)_100%)] pointer-events-none" />
+      </div>
 
-          <div className="flex flex-col text-left">
-            <span className="text-2xl font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">
-              CodeQuest
-            </span>
-            <span className="text-[10px] font-pixel text-emerald-600 uppercase tracking-widest font-bold">
-              LEARN • BUILD • CONQUER
-            </span>
-          </div>
-        </div>
+      {/* Floating Floating Code Runes & Ambient Accents */}
+      <div className="hidden lg:flex absolute top-36 right-20 z-10 bg-[#1e293b]/90 border-2 border-sky-400 px-2.5 py-1.5 rounded-xl shadow-[0_0_15px_rgba(56,189,248,0.6)] font-mono font-bold text-xs text-sky-200 items-center justify-center animate-float-delayed pointer-events-none">
+        &#123; &#125;
+      </div>
+      <div className="hidden lg:flex absolute bottom-44 left-16 z-10 bg-[#1e293b]/90 border-2 border-sky-400 px-2.5 py-1.5 rounded-xl shadow-[0_0_15px_rgba(56,189,248,0.6)] font-mono font-bold text-xs text-sky-200 items-center justify-center animate-float-slow pointer-events-none">
+        &lt;/&gt;
+      </div>
 
-        {/* Auth Mode Toggle Pill */}
-        <div className="flex items-center bg-slate-200/70 p-1 rounded-2xl">
-          <button
-            type="button"
-            onClick={() => setAuthView('login')}
-            className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              authView === 'login'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Log In
-          </button>
-          <button
-            type="button"
-            onClick={() => setAuthView('register')}
-            className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              authView === 'register'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Sign Up
-          </button>
+      {/* Top Header Branding & Auth Mode Controls */}
+      <header className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-10 pt-6 flex items-center justify-between">
+        <CodeQuestLogo size="md" showTagline={false} />
+
+        <div className="flex items-center gap-3">
+          {onOpenOnboarding && (
+            <button
+              type="button"
+              onClick={onOpenOnboarding}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl font-bold text-xs bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <Wand2 className="w-3.5 h-3.5 text-amber-600" />
+              <span>Character Creator</span>
+            </button>
+          )}
+
+          {/* Auth Mode Toggle Pill */}
+          <div className="flex items-center bg-white/90 backdrop-blur-md border border-slate-200/90 p-1 rounded-2xl shadow-xs">
+            <button
+              type="button"
+              onClick={() => setAuthView('login')}
+              className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                authView === 'login'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Log In
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthView('register')}
+              className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                authView === 'register'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main Split-Screen Canvas Layout */}
-      <main className="w-full max-w-7xl mx-auto flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-        {/* Left Column: Modern Clean Auth Card */}
-        <div className="lg:col-span-5 flex justify-center lg:justify-start">
-          {authView === 'login' && (
-            <CodeQuestLoginCard
-              onSwitchToRegister={() => setAuthView('register')}
-              onForgotPassword={() => setAuthView('forgot-password')}
-            />
-          )}
+      <main className="relative z-10 w-full max-w-7xl mx-auto flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center px-6 sm:px-10 py-8">
+        {authView === 'register' ? (
+          <>
+            {/* Left Column on Register: RPG Trailhead Scene */}
+            <div className="lg:col-span-7 hidden lg:flex items-center justify-center order-2 lg:order-1">
+              <CodeQuestTrailheadScene />
+            </div>
 
-          {authView === 'register' && (
-            <CodeQuestRegisterCard
-              onSwitchToLogin={() => setAuthView('login')}
-            />
-          )}
+            {/* Right Column on Register: Sign-Up Card */}
+            <div className="lg:col-span-5 flex justify-center lg:justify-end order-1 lg:order-2">
+              <CodeQuestRegisterCard
+                onSwitchToLogin={() => setAuthView('login')}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Left Column on Login / Forgot Password: Modern Clean Auth Card */}
+            <div className="lg:col-span-5 flex justify-center lg:justify-start">
+              {authView === 'login' ? (
+                <CodeQuestLoginCard
+                  onSwitchToRegister={() => setAuthView('register')}
+                  onForgotPassword={() => setAuthView('forgot-password')}
+                />
+              ) : (
+                <CodeQuestForgotPasswordCard
+                  onBackToLogin={() => setAuthView('login')}
+                />
+              )}
+            </div>
 
-          {authView === 'forgot-password' && (
-            <CodeQuestForgotPasswordCard
-              onBackToLogin={() => setAuthView('login')}
-            />
-          )}
-        </div>
-
-        {/* Right Column: 16-Bit Retro RPG Coding Scene with Gamification HUD */}
-        <div className="lg:col-span-7 hidden lg:flex items-center justify-center">
-          {authView === 'register' ? (
-            <CodeQuestTrailheadScene />
-          ) : (
-            <CodeQuestRpgScene />
-          )}
-        </div>
+            {/* Right Column on Login: 16-Bit Retro RPG Coding Scene with Gamification HUD */}
+            <div className="lg:col-span-7 hidden lg:flex items-center justify-center">
+              <CodeQuestRpgScene />
+            </div>
+          </>
+        )}
       </main>
 
       {/* Bottom Spacer for padding balance */}
-      <footer className="w-full max-w-7xl mx-auto py-4 text-center text-xs text-slate-400">
+      <footer className="relative z-10 w-full max-w-7xl mx-auto py-4 px-6 text-center text-xs text-slate-500">
         &copy; {new Date().getFullYear()} CodeQuest. All rights reserved. Level up your coding skills.
       </footer>
     </div>
