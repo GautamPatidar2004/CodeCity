@@ -8,8 +8,14 @@ import { AppShellDashboardView } from '../dashboard/AppShellDashboardView'
 import { FirstTimeDashboardView } from '../dashboard/FirstTimeDashboardView'
 import { LearnCatalogView } from '../learn/LearnCatalogView'
 import { CourseDetailView } from '../learn/CourseDetailView'
-import { QuestsPage } from '../../pages/QuestsPage'
-import { ProjectsPage } from '../../pages/ProjectsPage'
+import { InteractiveLessonView } from '../learn/InteractiveLessonView'
+import { CodingChallengeView } from '../learn/CodingChallengeView'
+import { QuestIDEView } from '../learn/QuestIDEView'
+import { PracticeArenaView } from '../practice/PracticeArenaView'
+import { ChallengeBriefingView } from '../practice/ChallengeBriefingView'
+import { ProjectsStudioView } from '../build/ProjectsStudioView'
+import { ProjectIDEView, ProjectIDERightPanel } from '../build/ProjectIDEView'
+import { GuidedProjectBuilderWorkspace } from '../guidedProjects/GuidedProjectBuilderWorkspace'
 import { CommunityPage } from '../../pages/CommunityPage'
 import { TeamArcadePage } from '../../pages/TeamArcadePage'
 import { GameToaster } from '../ui/GameToast'
@@ -25,10 +31,26 @@ import type { DashboardMode } from './TopHeader'
 
 export const AppShell: React.FC = () => {
   const { user, isAdmin } = useAuth()
-  const [activeTab, setActiveTab] = useState<NavItemKey>(isAdmin ? 'admin' : 'dashboard')
+  const [activeTab, setActiveTab] = useState<NavItemKey>(isAdmin ? 'admin' : 'learn')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('headquarters')
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>('python')
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>('ch4-lesson3')
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null)
+  const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null)
+  const [practiceBriefingId, setPracticeBriefingId] = useState<string | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedGuidedProjectId, setSelectedGuidedProjectId] = useState<string | null>(null)
+  const [buildTasks, setBuildTasks] = useState([
+    { label: 'Create hero section', xp: 25, done: true },
+    { label: 'Add navigation', xp: 25, done: true },
+    { label: 'Create project cards', xp: 25, done: true },
+    { label: 'Add responsive layout', xp: 25, done: true },
+    { label: 'Add contact section', xp: 25, done: false, active: true },
+    { label: 'Add animations', xp: 25, done: false },
+    { label: 'Test mobile layout', xp: 25, done: false },
+    { label: 'Publish project', xp: 100, done: false },
+  ])
 
   const isLevel1 = dashboardMode === 'first_time'
 
@@ -40,13 +62,20 @@ export const AppShell: React.FC = () => {
           activeTab={activeTab}
           onSelectTab={(tab) => {
             setActiveTab(tab)
-            if (tab !== 'learn') setSelectedCourseId(null)
+            if (tab !== 'learn') {
+              setSelectedCourseId(null)
+              setSelectedLessonId(null)
+            } else {
+              setSelectedCourseId('python')
+              setSelectedLessonId('ch4-lesson3')
+            }
           }}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           onContinueQuest={() => {
             setActiveTab('learn')
             setSelectedCourseId('python')
+            setSelectedLessonId('ch4-lesson3')
           }}
           userMode={isLevel1 ? 'level1' : 'level12'}
           isAdmin={isAdmin}
@@ -60,13 +89,29 @@ export const AppShell: React.FC = () => {
           activeTab={activeTab}
           onSelectTab={(tab) => {
             setActiveTab(tab)
-            if (tab !== 'learn') setSelectedCourseId(null)
+            if (tab !== 'learn') {
+              setSelectedCourseId(null)
+              setSelectedLessonId(null)
+            } else {
+              setSelectedCourseId('python')
+              setSelectedLessonId('ch4-lesson3')
+            }
           }}
           dashboardMode={dashboardMode}
           onChangeDashboardMode={setDashboardMode}
           courseDetailTitle={
-            activeTab === 'learn' && selectedCourseId
-              ? 'Course / Python Adventure'
+            activeTab === 'learn'
+              ? selectedQuestId
+                ? 'Chapter 04 / Loops & Logic ➔ Countdown Challenge'
+                : selectedChallengeId
+                ? 'Loops & Logic / Exercise 03'
+                : selectedLessonId
+                ? 'Python Adventure / Chapter 04 / Lesson 03'
+                : selectedCourseId
+                ? 'Course / Python Adventure'
+                : null
+              : activeTab === 'practice' && practiceBriefingId
+              ? 'Practice / Challenge Arena / Reverse the String'
               : null
           }
           onOpenLumi={() => {
@@ -113,11 +158,36 @@ export const AppShell: React.FC = () => {
 
           {activeTab === 'learn' && (
             <>
-              {selectedCourseId ? (
+              {selectedQuestId ? (
+                <QuestIDEView
+                  onBackToLesson={() => setSelectedQuestId(null)}
+                  onNextLesson={() => {
+                    setSelectedQuestId(null)
+                    setSelectedChallengeId(null)
+                    setSelectedLessonId(null)
+                  }}
+                />
+              ) : selectedChallengeId ? (
+                <CodingChallengeView
+                  onBackToLesson={() => setSelectedChallengeId(null)}
+                  onNextLesson={() => {
+                    setSelectedQuestId('ch4-quest03')
+                  }}
+                />
+              ) : selectedLessonId ? (
+                <InteractiveLessonView
+                  onBackToCourse={() => setSelectedLessonId(null)}
+                  onPreviousLesson={() => setSelectedLessonId(null)}
+                  onNextLesson={() => setSelectedChallengeId('ch4-ex03')}
+                />
+              ) : selectedCourseId ? (
                 <CourseDetailView
                   onBackToCourses={() => setSelectedCourseId(null)}
                   onStartQuest={() => {
-                    setActiveTab('practice')
+                    setSelectedLessonId('ch4-lesson3')
+                  }}
+                  onSelectLesson={(lessonId) => {
+                    setSelectedLessonId(lessonId)
                   }}
                   onOpenLumi={() => {
                     const btn = document.querySelector('button[title="Ask Lumi AI Mentor"]') as HTMLButtonElement | null
@@ -138,9 +208,49 @@ export const AppShell: React.FC = () => {
             </>
           )}
 
-          {activeTab === 'practice' && <QuestsPage />}
+          {activeTab === 'practice' && (
+            practiceBriefingId ? (
+              <ChallengeBriefingView
+                onBack={() => setPracticeBriefingId(null)}
+                onStartChallenge={() => {
+                  setActiveTab('learn')
+                  setPracticeBriefingId(null)
+                  setSelectedChallengeId('ch4-ex03')
+                }}
+                onPreviousChallenge={() => setPracticeBriefingId(null)}
+              />
+            ) : (
+              <PracticeArenaView
+                onStartChallenge={() => setPracticeBriefingId('reverse-string')}
+              />
+            )
+          )}
 
-          {activeTab === 'build' && <ProjectsPage />}
+          {activeTab === 'build' && (
+            selectedGuidedProjectId ? (
+              <GuidedProjectBuilderWorkspace
+                projectId={selectedGuidedProjectId}
+                onBack={() => setSelectedGuidedProjectId(null)}
+              />
+            ) : selectedProjectId ? (
+              <div className="grid grid-cols-12 gap-5 items-start">
+                <div className="col-span-9">
+                  <ProjectIDEView onBack={() => setSelectedProjectId(null)} />
+                </div>
+                <div className="col-span-3">
+                  <ProjectIDERightPanel
+                    tasks={buildTasks}
+                    onToggleTask={(i) => setBuildTasks(prev => prev.map((t, idx) => idx === i ? { ...t, done: !t.done } : t))}
+                  />
+                </div>
+              </div>
+            ) : (
+              <ProjectsStudioView
+                onNewProject={() => setSelectedProjectId('portfolio')}
+                onSelectGuidedProject={(id) => setSelectedGuidedProjectId(id)}
+              />
+            )
+          )}
 
           {activeTab === 'arcade' && <TeamArcadePage />}
 
