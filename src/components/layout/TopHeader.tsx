@@ -80,50 +80,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           <span>{courseDetailTitle ? courseDetailTitle : currentTabInfo.title}</span>
         </div>
 
-        {/* 3-Way Reference Screen Switcher */}
-        {onChangeDashboardMode && (
-          <div className="hidden md:flex items-center gap-1 bg-[#f4f1ea] p-1 rounded-xl border border-[#e5dfd5]">
-            <button
-              type="button"
-              onClick={() => onChangeDashboardMode('overview')}
-              className={cn(
-                "px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer",
-                dashboardMode === 'overview'
-                  ? "bg-white text-stone-900 shadow-2xs font-extrabold"
-                  : "text-stone-500 hover:text-stone-800"
-              )}
-              title="Image 1: App Shell Overview"
-            >
-              🏠 App Shell
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeDashboardMode('headquarters')}
-              className={cn(
-                "px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer",
-                dashboardMode === 'headquarters'
-                  ? "bg-white text-stone-900 shadow-2xs font-extrabold"
-                  : "text-stone-500 hover:text-stone-800"
-              )}
-              title="Image 2: Main Headquarters Dashboard"
-            >
-              ⚔️ Headquarters
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeDashboardMode('first_time')}
-              className={cn(
-                "px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer",
-                dashboardMode === 'first_time'
-                  ? "bg-white text-stone-900 shadow-2xs font-extrabold"
-                  : "text-stone-500 hover:text-stone-800"
-              )}
-              title="Image 3: First-Time / Empty State"
-            >
-              🌱 First-Time
-            </button>
-          </div>
-        )}
       </div>
 
       {/* RIGHT: Gamified Stats HUD & User Controls */}
