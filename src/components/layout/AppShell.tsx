@@ -13,6 +13,8 @@ import { CodingChallengeView } from '../learn/CodingChallengeView'
 import { QuestIDEView } from '../learn/QuestIDEView'
 import { PracticeArenaView } from '../practice/PracticeArenaView'
 import { ChallengeBriefingView } from '../practice/ChallengeBriefingView'
+import { CrucibleWorkspace } from '../crucible/CrucibleWorkspace'
+import { getCrucibleChallenge } from '../crucible/challengeData'
 import { ProjectsStudioView } from '../build/ProjectsStudioView'
 import { ProjectIDEView, ProjectIDERightPanel } from '../build/ProjectIDEView'
 import { GuidedProjectBuilderWorkspace } from '../guidedProjects/GuidedProjectBuilderWorkspace'
@@ -40,6 +42,7 @@ export const AppShell: React.FC = () => {
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null)
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null)
   const [practiceBriefingId, setPracticeBriefingId] = useState<string | null>(null)
+  const [crucibleChallengeId, setCrucibleChallengeId] = useState<string | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedGuidedProjectId, setSelectedGuidedProjectId] = useState<string | null>(null)
   const [buildTasks, setBuildTasks] = useState([
@@ -253,19 +256,31 @@ export const AppShell: React.FC = () => {
           )}
 
           {activeTab === 'practice' && (
-            practiceBriefingId ? (
+            crucibleChallengeId ? (
+              <CrucibleWorkspace
+                challenge={getCrucibleChallenge(crucibleChallengeId) ?? getCrucibleChallenge('reverse-string')!}
+                userId={user?.id}
+                onBack={() => setCrucibleChallengeId(null)}
+                onNextChallenge={() => setCrucibleChallengeId(null)}
+              />
+            ) : practiceBriefingId ? (
               <ChallengeBriefingView
                 onBack={() => setPracticeBriefingId(null)}
                 onStartChallenge={() => {
-                  setActiveTab('learn')
+                  setCrucibleChallengeId(practiceBriefingId)
                   setPracticeBriefingId(null)
-                  setSelectedChallengeId('ch4-ex03')
                 }}
                 onPreviousChallenge={() => setPracticeBriefingId(null)}
               />
             ) : (
               <PracticeArenaView
-                onStartChallenge={() => setPracticeBriefingId('reverse-string')}
+                onStartChallenge={(id?: string) => {
+                  if (id) {
+                    setCrucibleChallengeId(id)
+                  } else {
+                    setPracticeBriefingId('reverse-string')
+                  }
+                }}
               />
             )
           )}
