@@ -22,6 +22,8 @@ export interface CommunityPost {
   status: 'published' | 'hidden' | 'draft'
   created_at?: string
   updated_at?: string
+  image_url?: string | null
+  video_url?: string | null
   author_name?: string
   author_role?: string
   likes_count: number
@@ -62,7 +64,7 @@ export async function fetchCommunityFeed(
       .from('community_posts')
       .select(`
         *,
-        profile:profiles (
+        profile:profiles!user_id (
           full_name,
           username,
           role
@@ -92,7 +94,12 @@ export async function fetchCommunityFeed(
 
     const { data, error } = await query
 
-    if (error || !data || data.length === 0) {
+    if (error) {
+      console.error('Error fetching community feed:', error)
+      return []
+    }
+
+    if (!data || data.length === 0) {
       return []
     }
 
@@ -130,6 +137,8 @@ export async function fetchCommunityFeed(
       status: item.status,
       created_at: item.created_at,
       updated_at: item.updated_at,
+      image_url: item.image_url,
+      video_url: item.video_url,
       author_name: item.profile?.full_name || item.profile?.username || 'Adventurer',
       author_role: item.profile?.role || 'student',
       likes_count: likesCountMap.get(item.id) || 0,
@@ -148,7 +157,8 @@ export async function fetchCommunityFeed(
           }
         : undefined,
     }))
-  } catch {
+  } catch (err) {
+    console.error('Error fetching community feed exception:', err)
     return []
   }
 }
@@ -186,7 +196,7 @@ export async function fetchPostComments(postId: string): Promise<PostComment[]> 
       .from('post_comments')
       .select(`
         *,
-        profile:profiles (
+        profile:profiles!user_id (
           full_name,
           username,
           role
@@ -223,7 +233,7 @@ export async function addPostComment(userId: string, postId: string, content: st
       })
       .select(`
         *,
-        profile:profiles (
+        profile:profiles!user_id (
           full_name,
           username,
           role
@@ -574,3 +584,27 @@ export function useCommunityFeed(
     refreshFeed: loadFeed,
   }
 }
+
+export async function ensureProfileExists(userId: string, defaultName?: string): Promise<void> {
+  try {
+    const { data } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle()
+    if (!data) {
+      const name = defaultName || 'Adventurer'
+      await supabase.from('profiles').upsert(
+        {
+          id: userId,
+          username: name.toLowerCase().replace(/\s+/g, '_'),
+          full_name: name,
+          role: 'student',
+          xp: 50,
+          level: 1,
+          streak: 1,
+        },
+        { onConflict: 'id' }
+      )
+    }
+  } catch (err) {
+    console.error('Error ensuring profile exists:', err)
+  }
+}
+

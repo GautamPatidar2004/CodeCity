@@ -43,15 +43,21 @@ export interface ProjectProgressSummary {
 export interface ProjectShowcase {
   id: string
   user_id: string
-  project_id: string
+  project_id?: string | null
   title: string
   description: string
-  preview_url?: string
-  live_url?: string
+  preview_url?: string | null
+  live_url?: string | null
+  image_url?: string | null
+  video_url?: string | null
+  language?: string | null
+  category?: string | null
+  difficulty?: string | null
   is_published: boolean
   created_at?: string
   updated_at?: string
   author_name?: string
+  author_role?: string
   project_title?: string
 }
 
@@ -353,8 +359,14 @@ export async function fetchShowcases(projectId?: string): Promise<ProjectShowcas
       .from('project_showcases')
       .select(`
         *,
-        profile:profiles(full_name, username),
-        project:projects(title)
+        profile:profiles!user_id (
+          full_name,
+          username,
+          role
+        ),
+        project:projects (
+          title
+        )
       `)
       .eq('is_published', true)
       .order('created_at', { ascending: false })
@@ -377,15 +389,39 @@ export async function fetchShowcases(projectId?: string): Promise<ProjectShowcas
       description: item.description,
       preview_url: item.preview_url,
       live_url: item.live_url,
+      image_url: item.image_url,
+      video_url: item.video_url,
+      language: item.language,
+      category: item.category,
+      difficulty: item.difficulty,
       is_published: item.is_published,
       created_at: item.created_at,
       updated_at: item.updated_at,
       author_name: item.profile?.full_name || item.profile?.username || 'Adventurer',
-      project_title: item.project?.title || 'Coding Project',
+      author_role: item.profile?.role || 'student',
+      project_title: item.project?.title || item.category || 'Coding Project',
     }))
   } catch {
     return []
   }
+}
+
+export function useProjectShowcases(projectId?: string) {
+  const [showcases, setShowcases] = useState<ProjectShowcase[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const data = await fetchShowcases(projectId)
+    setShowcases(data)
+    setLoading(false)
+  }, [projectId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  return { showcases, loading, refreshShowcases: load }
 }
 
 export async function fetchUserShowcase(userId: string, projectId: string): Promise<ProjectShowcase | null> {
@@ -406,20 +442,30 @@ export async function fetchUserShowcase(userId: string, projectId: string): Prom
 
 export async function submitProjectShowcase(
   userId: string,
-  projectId: string,
+  projectId: string | null | undefined,
   title: string,
   description: string,
   previewUrl?: string,
-  liveUrl?: string
+  liveUrl?: string,
+  imageUrl?: string,
+  videoUrl?: string,
+  language?: string,
+  category?: string,
+  difficulty?: string
 ): Promise<ProjectShowcase | null> {
   try {
     const now = new Date().toISOString()
-    const { data: existingShowcase } = await supabase
-      .from('project_showcases')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('project_id', projectId)
-      .maybeSingle()
+    let existingShowcase: { id: string } | null = null
+
+    if (projectId) {
+      const { data } = await supabase
+        .from('project_showcases')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('project_id', projectId)
+        .maybeSingle()
+      existingShowcase = data
+    }
 
     let showcaseRecord: ProjectShowcase | null = null
 
@@ -431,6 +477,11 @@ export async function submitProjectShowcase(
           description,
           preview_url: previewUrl || null,
           live_url: liveUrl || null,
+          image_url: imageUrl || null,
+          video_url: videoUrl || null,
+          language: language || null,
+          category: category || null,
+          difficulty: difficulty || null,
           is_published: true,
           updated_at: now,
         })
@@ -445,11 +496,16 @@ export async function submitProjectShowcase(
         .from('project_showcases')
         .insert({
           user_id: userId,
-          project_id: projectId,
+          project_id: projectId || null,
           title,
           description,
           preview_url: previewUrl || null,
           live_url: liveUrl || null,
+          image_url: imageUrl || null,
+          video_url: videoUrl || null,
+          language: language || null,
+          category: category || null,
+          difficulty: difficulty || null,
           is_published: true,
           updated_at: now,
         })

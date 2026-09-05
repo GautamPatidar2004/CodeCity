@@ -18,6 +18,7 @@ import {
 import {
   createProjectStage,
   updateProjectStage,
+  getStageTestCases,
   type ProjectStage,
   type ValidationType,
   type IOTestCase,
@@ -64,9 +65,10 @@ export const StageEditorModal: React.FC<StageEditorModalProps> = ({
       setInstructions(stageToEdit.instructions || '')
       setStarterCode(stageToEdit.starter_code || '')
       setValidationType(stageToEdit.validation_type || 'io_test')
+      const loadedCases = getStageTestCases(stageToEdit.validation_config)
       setTestCases(
-        stageToEdit.validation_config?.test_cases?.length > 0
-          ? stageToEdit.validation_config.test_cases
+        loadedCases.length > 0
+          ? loadedCases
           : [{ input: '', expected_output: '', is_hidden: false }]
       )
       setXpReward(stageToEdit.xp_reward ?? 20)
