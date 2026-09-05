@@ -49,17 +49,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onOpenOnboarding }) => {
         <CodeQuestLogo size="md" showTagline={false} />
 
         <div className="flex items-center gap-3">
-          {onOpenOnboarding && (
-            <button
-              type="button"
-              onClick={onOpenOnboarding}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl font-bold text-xs bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer shadow-xs active:scale-95"
-            >
-              <Wand2 className="w-3.5 h-3.5 text-amber-600" />
-              <span>Character Creator</span>
-            </button>
-          )}
-
           {/* Auth Mode Toggle Pill */}
           <div className="flex items-center bg-white/90 backdrop-blur-md border border-slate-200/90 p-1 rounded-2xl shadow-xs">
             <button

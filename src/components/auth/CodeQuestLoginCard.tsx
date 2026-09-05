@@ -36,18 +36,6 @@ export const CodeQuestLoginCard: React.FC<CodeQuestLoginCardProps> = ({
     }
   }
 
-  // Quick Demo Auto-Fill helper for effortless testing
-  const handleQuickDemoFill = (roleType: 'student' | 'admin') => {
-    if (roleType === 'student') {
-      setEmail('student@codequest.dev')
-      setPassword('CodeQuest123!')
-    } else {
-      setEmail('admin@codequest.dev')
-      setPassword('AdminQuest123!')
-    }
-    setErrorMessage(null)
-  }
-
   return (
     <div className="w-full max-w-[480px] bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(15,23,42,0.06)] flex flex-col transition-all">
       {/* Small emerald header tag */}
@@ -77,29 +65,6 @@ export const CodeQuestLoginCard: React.FC<CodeQuestLoginCardProps> = ({
       <p className="text-slate-500 text-sm font-medium mb-5">
         Pick up where you left off and keep leveling up your skills.
       </p>
-
-      {/* Quick Demo Accounts Tag for rapid testing */}
-      <div className="mb-5 p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl flex items-center justify-between text-xs">
-        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Demo Presets:
-        </span>
-        <div className="flex gap-1.5">
-          <button
-            type="button"
-            onClick={() => handleQuickDemoFill('student')}
-            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
-          >
-            🎓 Student
-          </button>
-          <button
-            type="button"
-            onClick={() => handleQuickDemoFill('admin')}
-            className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
-          >
-            🛡️ Admin
-          </button>
-        </div>
-      </div>
 
       {/* Auth Form */}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

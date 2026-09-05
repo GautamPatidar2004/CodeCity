@@ -103,66 +103,6 @@ export const CodeQuestRegisterCard: React.FC<CodeQuestRegisterCardProps> = ({
         Choose your role, build real things, and level up as you learn.
       </p>
 
-      {/* Role Selection Tabs / Cards */}
-      <div className="mb-5 text-left">
-        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-2">
-          SELECT YOUR ROLE
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          {/* Student Option */}
-          <button
-            type="button"
-            onClick={() => setRole('student')}
-            className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
-              role === 'student'
-                ? 'border-emerald-500 bg-emerald-50/60 shadow-[0_4px_16px_rgba(16,185,129,0.2)] ring-2 ring-emerald-500/20'
-                : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-sm">
-                <GraduationCap className="w-4 h-4" />
-              </div>
-              {role === 'student' && (
-                <span className="text-[10px] font-pixel text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">
-                  ACTIVE
-                </span>
-              )}
-            </div>
-            <div>
-              <div className="font-bold text-sm text-slate-900">Student</div>
-              <div className="text-[11px] text-slate-500 leading-snug">Earn XP, solve quests & master code</div>
-            </div>
-          </button>
-
-          {/* Admin Option */}
-          <button
-            type="button"
-            onClick={() => setRole('admin')}
-            className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
-              role === 'admin'
-                ? 'border-purple-500 bg-purple-50/60 shadow-[0_4px_16px_rgba(168,85,247,0.2)] ring-2 ring-purple-500/20'
-                : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm">
-                <ShieldAlert className="w-4 h-4" />
-              </div>
-              {role === 'admin' && (
-                <span className="text-[10px] font-pixel text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded">
-                  ADMIN
-                </span>
-              )}
-            </div>
-            <div>
-              <div className="font-bold text-sm text-slate-900">Admin / Mentor</div>
-              <div className="text-[11px] text-slate-500 leading-snug">Manage learners, quests & platform</div>
-            </div>
-          </button>
-        </div>
-      </div>
-
       {/* Auth Form */}
       <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
         {/* Full Name Input */}

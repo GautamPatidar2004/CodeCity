@@ -30,10 +30,10 @@ import { useAuth } from '../../context/AuthContext'
 import type { DashboardMode } from './TopHeader'
 
 export const AppShell: React.FC = () => {
-  const { user, isAdmin } = useAuth()
-  const [activeTab, setActiveTab] = useState<NavItemKey>(isAdmin ? 'admin' : 'learn')
+  const { user, profile, isAdmin } = useAuth()
+  const [activeTab, setActiveTab] = useState<NavItemKey>(isAdmin ? 'admin' : 'dashboard')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [dashboardMode, setDashboardMode] = useState<DashboardMode>('headquarters')
+  const dashboardMode: DashboardMode = (profile?.xp ?? 0) > 50 ? 'headquarters' : 'first_time'
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>('python')
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>('ch4-lesson3')
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null)
@@ -98,7 +98,6 @@ export const AppShell: React.FC = () => {
             }
           }}
           dashboardMode={dashboardMode}
-          onChangeDashboardMode={setDashboardMode}
           courseDetailTitle={
             activeTab === 'learn'
               ? selectedQuestId
