@@ -17,7 +17,7 @@ import { CrucibleWorkspace } from '../crucible/CrucibleWorkspace'
 import { getCrucibleChallenge } from '../crucible/challengeData'
 import { ProjectsStudioView } from '../build/ProjectsStudioView'
 import { ProjectIDEView, ProjectIDERightPanel } from '../build/ProjectIDEView'
-import { GuidedProjectBuilderWorkspace } from '../guidedProjects/GuidedProjectBuilderWorkspace'
+import { DwarvenForgeWorkbench } from '../crucible/DwarvenForgeWorkbench'
 import { CommunityPage } from '../../pages/CommunityPage'
 import { TeamArcadePage } from '../../pages/TeamArcadePage'
 import { GameToaster } from '../ui/GameToast'
@@ -287,7 +287,7 @@ export const AppShell: React.FC = () => {
 
           {activeTab === 'build' && (
             selectedGuidedProjectId ? (
-              <GuidedProjectBuilderWorkspace
+              <DwarvenForgeWorkbench
                 projectId={selectedGuidedProjectId}
                 onBack={() => setSelectedGuidedProjectId(null)}
               />

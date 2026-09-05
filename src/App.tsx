@@ -5,6 +5,7 @@ import { AppShell } from './components/layout/AppShell'
 import { AdminShell } from './components/layout/AdminShell'
 import { GameToaster } from './components/ui/GameToast'
 import { CodeQuestOnboardingFlow } from './components/onboarding/CodeQuestOnboardingFlow'
+import { BladeOfChaosCursor } from './components/ui/BladeOfChaosCursor'
 
 const MainApp: React.FC = () => {
   const { user, loading, isAdmin } = useAuth()
@@ -82,6 +83,8 @@ const MainApp: React.FC = () => {
 export default function App() {
   return (
     <AuthProvider>
+      {/* Blade of Olympus cursor is global — active on every route */}
+      <BladeOfChaosCursor />
       <MainApp />
     </AuthProvider>
   )
