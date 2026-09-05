@@ -1,184 +1,282 @@
 @import "tailwindcss";
 
+/* ======================================================================
+   THE CRUCIBLE — Global Design System
+   Phase 1: Visual Foundation & Global Shell
+   ====================================================================== */
+
 @layer base {
   :root {
-    --font-sans: 'Mulish', system-ui, -apple-system, sans-serif;
-    --font-pixel: 'Press Start 2P', monospace;
+    /* --- Brand Fonts --- */
+    --font-display: 'Cinzel Decorative', serif;
+    --font-cinzel: 'Cinzel', serif;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
-    --background: #f8fafc;
-    --foreground: #0f172a;
-    --card: #ffffff;
-    --card-foreground: #0f172a;
+    /* --- The Crucible Color Palette --- */
+    --crucible-black: #070505;
+    --crucible-charcoal: #0E0A0A;
+    --crucible-iron: #1A1010;
+    --crucible-stone: #2A1A1A;
+    --crucible-mist: #3D2525;
 
-    --primary: #fbbf24;
-    --primary-foreground: #0f172a;
-    --secondary: #10b981;
-    --secondary-foreground: #ffffff;
-    --accent: #c084fc;
-    --accent-foreground: #0f172a;
+    /* Crimson — Primary Brand */
+    --crimson-900: #7F1D1D;
+    --crimson-700: #B91C1C;
+    --crimson-600: #DC2626;
+    --crimson-500: #EF4444;
+    --crimson-400: #FF4D4D;
+    --crimson-ember: #FF2A00;
 
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --border: #e2e8f0;
+    /* Hacksilver — XP / Gold */
+    --gold-deep: #784E10;
+    --gold-mid: #C59B27;
+    --gold-bright: #F5C842;
+    --gold-glow: #FFD700;
+
+    /* Frost / Cyan accent */
+    --frost-teal: #00E5FF;
+
+    /* --- Borders & Surfaces --- */
+    --border-iron: rgba(220, 38, 38, 0.18);
+    --border-blood: rgba(220, 38, 38, 0.35);
+    --surface-glass: rgba(14, 10, 10, 0.72);
+    --surface-card: rgba(26, 16, 16, 0.85);
   }
 
+  /* ---- GLOBAL CURSOR OVERRIDE ---- */
   * {
-    cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAzElEQVRYR+2X0Q6AIAhF5f8/2jYXZkwEjNSVvVUjDpcrGgT7FUkI2D9xRfQETwNIiWO85wfINfQUEyxBG2ArsLwC0jioGt5zFcwF4OYDPi/mBYKm4t0U8ATgRm3ThFoAqkhNgWkA0jJLvaOVSs7j3qMnSgXWBMiWPXe94QqMBMBc1VZIvaTu5u5pQewq0EqNZvIEMCmxAawK0DNkay9QmfFNAJUXfgGgUkLaE7j/h8fnASkxHTz0DGIBMCnBeeM7AArpUd3mz2x3C7wADglA8BcWMZhZAAAAAElFTkSuQmCC'), auto;
-  }
-
-  input, textarea, p, h1, h2, h3, h4, h5, h6, span {
-    cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABFklEQVRYR9WXURLDIAhE6/0PbSdOtUpcd1Gnpv1KGpTHBpCE1/cXq+vrMph7dGvXZTtpfW10DCA5jrH1H0Jhs5E0hnZdCR+vb5S8Nn8mQCeS9BdSalYJqMBjAGzq59xAESN7VFVUgV8AZB/dZBR7QTFDCqGquvUBVVoEtgIwpQRzmANSFHgWQKExHdIrPeuMvQNDarXe6nC/AutgV3JW+6bgqQLeV8FekRtgV+ToDKEKnACYKsfZjjkam7a0ZpYTytwmgainpC3HvwBocgKOxqRjehoR9DFKNFYtOwCGYCszobeCbl26N6yyQ6g8X/Wex/rBPsNEV6qAMaJPMynIHQCoSqS9JSMmwef51LflTgCRszU7DvAGiV6mHWfsaVUAAAAASUVORK5CYII='), text;
-  }
-
-  a, button, [role="button"], label, select, input[type="submit"], input[type="button"] {
-    cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAzElEQVRYR+2X0Q6AIAhF5f8/2jYXZkwEjNSVvVUjDpcrGgT7FUkI2D9xRfQETwNIiWO85wfINfQUEyxBG2ArsLwC0jioGt5zFcwF4OYDPi/mBYKm4t0U8ATgRm3ThFoAqkhNgWkA0jJLvaOVSs7j3qMnSgXWBMiWPXe94QqMBMBc1VZIvaTu5u5pQewq0EqNZvIEMCmxAawK0DNkay9QmfFNAJUXfgGgUkLaE7j/h8fnASkxHTz0DGIBMCnBeeM7AArpUd3mz2x3C7wADglA8BcWMZhZAAAAAElFTkSuQmCC'), pointer;
+    cursor: none !important;
+    box-sizing: border-box;
   }
 
   body {
-    background-color: var(--background);
-    color: var(--foreground);
+    background-color: var(--crucible-black);
+    color: #E8D5D5;
     font-family: var(--font-sans);
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Input / text elements still use none via the global rule */
+  input, textarea {
+    cursor: none !important;
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background: rgba(220, 38, 38, 0.55);
+    color: #fff;
   }
 }
 
-/* Custom Typography Utilities */
-.font-pixel {
-  font-family: 'Press Start 2P', monospace, cursive;
+/* ======================================================================
+   TYPOGRAPHY UTILITIES
+   ====================================================================== */
+.font-display {
+  font-family: 'Cinzel Decorative', serif;
+}
+
+.font-cinzel {
+  font-family: 'Cinzel', serif;
 }
 
 .font-sans {
-  font-family: 'Mulish', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 .font-mono {
   font-family: 'JetBrains Mono', monospace;
 }
 
-.pixelated {
-  image-rendering: pixelated;
-  image-rendering: -moz-crisp-edges;
-  image-rendering: crisp-edges;
+/* Legacy compat */
+.font-pixel {
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-/* 3D Tactile Gamified Button */
-.btn-3d {
-  position: relative;
-  transition: all 0.15s ease-in-out;
-  border-bottom-width: 4px;
-}
+/* ======================================================================
+   CRUCIBLE KEYFRAME ANIMATIONS
+   ====================================================================== */
 
-.btn-3d:active {
-  transform: translateY(2px);
-  border-bottom-width: 1px;
-}
-
-/* Custom Keyframe Animations */
-@keyframes float {
+/* Background Omega pulse */
+@keyframes omega-breathe {
   0%, 100% {
-    transform: translateY(0px);
+    opacity: 0.08;
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 0 60px rgba(220, 38, 38, 0.3));
   }
   50% {
-    transform: translateY(-6px);
+    opacity: 0.15;
+    transform: translate(-50%, -50%) scale(1.03);
+    filter: drop-shadow(0 0 120px rgba(220, 38, 38, 0.55));
   }
+}
+
+/* Ember float for small particles */
+@keyframes ember-float {
+  0% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+  50% { transform: translateY(-8px) rotate(5deg); opacity: 1; }
+  100% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+}
+
+/* Lava underline slide-in */
+@keyframes lava-slide {
+  from { transform: scaleX(0); transform-origin: left; }
+  to   { transform: scaleX(1); transform-origin: left; }
+}
+
+/* Blade cursor appear */
+@keyframes blade-appear {
+  from { opacity: 0; transform: scale(0.6) rotate(-60deg); }
+  to   { opacity: 1; transform: scale(1) rotate(-50deg); }
+}
+
+/* Crimson glow pulse */
+@keyframes crimson-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  50%       { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.25); }
+}
+
+/* Rune shimmer for chain on cursor */
+@keyframes rune-shimmer {
+  0%, 100% { stroke-opacity: 0.5; }
+  50%       { stroke-opacity: 1; }
+}
+
+/* Notification bell shake */
+@keyframes bell-shake {
+  0%, 100% { transform: rotate(0deg); }
+  15%       { transform: rotate(10deg); }
+  30%       { transform: rotate(-10deg); }
+  45%       { transform: rotate(8deg); }
+  60%       { transform: rotate(-6deg); }
+  75%       { transform: rotate(4deg); }
+  90%       { transform: rotate(-2deg); }
+}
+
+/* Classic float for floating elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
 }
 
 @keyframes float-slow {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
 }
 
-@keyframes float-delayed {
-  0%, 100% {
-    transform: translateY(-6px);
-  }
-  50% {
-    transform: translateY(2px);
-  }
+/* Neon glow pulses (crimson for the new theme) */
+@keyframes neon-glow-crimson {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.6)) drop-shadow(0 0 12px rgba(220, 38, 38, 0.3)); }
+  50%       { filter: drop-shadow(0 0 14px rgba(220, 38, 38, 1)) drop-shadow(0 0 28px rgba(220, 38, 38, 0.6)); }
 }
 
-@keyframes neon-glow-cyan {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6)) drop-shadow(0 0 12px rgba(56, 189, 248, 0.4));
-  }
-  50% {
-    filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.9)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.6));
-  }
+@keyframes neon-glow-gold {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(197, 155, 39, 0.6)) drop-shadow(0 0 12px rgba(197, 155, 39, 0.3)); }
+  50%       { filter: drop-shadow(0 0 14px rgba(197, 155, 39, 1)) drop-shadow(0 0 28px rgba(197, 155, 39, 0.6)); }
 }
 
-@keyframes neon-glow-orange {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.6)) drop-shadow(0 0 12px rgba(249, 115, 22, 0.4));
-  }
-  50% {
-    filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.9)) drop-shadow(0 0 20px rgba(249, 115, 22, 0.6));
-  }
+/* Animate utilities */
+.animate-omega-breathe { animation: omega-breathe 5s ease-in-out infinite; }
+.animate-ember-float   { animation: ember-float 3.5s ease-in-out infinite; }
+.animate-bell-shake    { animation: bell-shake 0.7s ease-in-out; }
+.animate-float         { animation: float 3.5s ease-in-out infinite; }
+.animate-float-slow    { animation: float-slow 4.8s ease-in-out infinite; }
+.animate-neon-crimson  { animation: neon-glow-crimson 3s ease-in-out infinite; }
+.animate-neon-gold     { animation: neon-glow-gold 3.2s ease-in-out infinite; }
+
+/* ======================================================================
+   CRUCIBLE COMPONENT CLASSES
+   ====================================================================== */
+
+/* Glass card surface */
+.crucible-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-iron);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-@keyframes neon-glow-yellow {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px rgba(234, 179, 8, 0.6)) drop-shadow(0 0 12px rgba(234, 179, 8, 0.4));
-  }
-  50% {
-    filter: drop-shadow(0 0 12px rgba(234, 179, 8, 0.9)) drop-shadow(0 0 20px rgba(234, 179, 8, 0.6));
-  }
+.crucible-card-hover:hover {
+  border-color: var(--border-blood);
+  box-shadow: 0 0 24px rgba(220, 38, 38, 0.12);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-@keyframes twinkle {
-  0%, 100% {
-    opacity: 0.3;
-    transform: scale(0.85);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
+/* Lava gradient button */
+.btn-lava {
+  background: linear-gradient(135deg, #DC2626, #FF3D00);
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.45), 0 0 0 0 rgba(220, 38, 38, 0);
+  border: 1px solid rgba(255, 100, 50, 0.3);
+  transition: all 0.2s ease;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.btn-lava:hover {
+  box-shadow: 0 6px 32px rgba(255, 61, 0, 0.65), 0 0 0 3px rgba(220, 38, 38, 0.2);
+  transform: translateY(-1px);
+}
+.btn-lava:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 12px rgba(220, 38, 38, 0.4);
 }
 
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
-  }
-  50% {
-    box-shadow: 0 6px 24px rgba(16, 185, 129, 0.7);
-  }
+/* Navigation tab active lava underline */
+.nav-tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #FF2A00, #DC2626, #FF2A00, transparent);
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(255, 42, 0, 0.8), 0 0 20px rgba(220, 38, 38, 0.5);
+  animation: lava-slide 0.25s ease-out;
 }
 
-.animate-float {
-  animation: float 3.5s ease-in-out infinite;
+/* Gold HUD pill */
+.hud-gold {
+  background: linear-gradient(135deg, rgba(120, 78, 16, 0.4), rgba(197, 155, 39, 0.15));
+  border: 1px solid rgba(197, 155, 39, 0.4);
+  color: var(--gold-bright);
 }
 
-.animate-float-slow {
-  animation: float-slow 4.8s ease-in-out infinite;
+/* Crimson HUD pill */
+.hud-crimson {
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.4), rgba(220, 38, 38, 0.15));
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  color: #FF8080;
 }
 
-.animate-float-delayed {
-  animation: float-delayed 4s ease-in-out infinite;
+/* Iron HUD pill */
+.hud-iron {
+  background: linear-gradient(135deg, rgba(30, 23, 21, 0.8), rgba(42, 26, 26, 0.6));
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: #C4A5A5;
 }
 
-.animate-neon-cyan {
-  animation: neon-glow-cyan 3s ease-in-out infinite;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
-
-.animate-neon-orange {
-  animation: neon-glow-orange 3.2s ease-in-out infinite;
+::-webkit-scrollbar-track {
+  background: #0E0A0A;
 }
-
-.animate-neon-yellow {
-  animation: neon-glow-yellow 2.8s ease-in-out infinite;
+::-webkit-scrollbar-thumb {
+  background: #2A1414;
+  border-radius: 3px;
 }
-
-.animate-twinkle {
-  animation: twinkle 2.5s ease-in-out infinite;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2.5s ease-in-out infinite;
+::-webkit-scrollbar-thumb:hover {
+  background: #DC2626;
 }

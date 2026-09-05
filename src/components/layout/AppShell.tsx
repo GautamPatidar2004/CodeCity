@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Sidebar, type NavItemKey } from './Sidebar'
-import { TopHeader } from './TopHeader'
+import { CrucibleHeader } from './CrucibleHeader'
 import { LumiAIFloatingButton } from './LumiAIFloatingButton'
 import { MobileBottomNav } from './MobileBottomNav'
 import { AppShellOverviewView } from '../dashboard/AppShellOverviewView'
@@ -19,6 +19,7 @@ import { GuidedProjectBuilderWorkspace } from '../guidedProjects/GuidedProjectBu
 import { CommunityPage } from '../../pages/CommunityPage'
 import { TeamArcadePage } from '../../pages/TeamArcadePage'
 import { GameToaster } from '../ui/GameToast'
+import { BladeOfChaosCursor } from '../ui/BladeOfChaosCursor'
 import { AlexPixelAvatar } from '../brand/PixelArtAvatars'
 import {
   Sparkles,
@@ -27,7 +28,7 @@ import {
   Camera,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import type { DashboardMode } from './TopHeader'
+import type { DashboardMode } from './CrucibleHeader'
 
 export const AppShell: React.FC = () => {
   const { user, profile, isAdmin } = useAuth()
@@ -55,7 +56,52 @@ export const AppShell: React.FC = () => {
   const isLevel1 = dashboardMode === 'first_time'
 
   return (
-    <div className="min-h-screen w-full bg-[#faf8f4] text-stone-900 flex flex-col md:flex-row font-sans selection:bg-emerald-500 selection:text-white antialiased">
+    <div className="min-h-screen w-full flex flex-col md:flex-row antialiased" style={{ background: '#070505', color: '#E8D5D5', fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* ── GLOBAL BLADE OF CHAOS CURSOR ENGINE ── */}
+      <BladeOfChaosCursor />
+
+      {/* ── ATMOSPHERIC BACKGROUND CANVAS (fixed, below everything) ── */}
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
+        {/* Layer 1: Nordic mountain pass photo */}
+        <img
+          src="https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=2400&q=85"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ filter: 'brightness(0.24) contrast(1.3) saturate(0.8)' }}
+        />
+        {/* Layer 2: Blood-mist, frost-vignette & charred ash overlays */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: [
+              'radial-gradient(circle at 50% 15%, rgba(185,28,28,0.32) 0%, transparent 55%)',
+              'radial-gradient(circle at 50% 100%, rgba(153,27,27,0.40) 0%, transparent 65%)',
+              'radial-gradient(circle at 15% 50%, rgba(0,229,255,0.09) 0%, transparent 45%)',
+              'linear-gradient(to bottom, rgba(7,5,5,0.65) 0%, rgba(7,5,5,0.90) 100%)'
+            ].join(', '),
+          }}
+        />
+        {/* Layer 3: Central Omega watermark */}
+        <div
+          className="absolute animate-omega-breathe pointer-events-none select-none"
+          aria-hidden="true"
+          style={{
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: '620px',
+            lineHeight: 1,
+            fontFamily: "'Cinzel Decorative', serif",
+            fontWeight: 900,
+            color: 'rgba(185,28,28,0.12)',
+            filter: 'drop-shadow(0 0 80px rgba(220,38,38,0.45))',
+            userSelect: 'none',
+          }}
+        >
+          Ω
+        </div>
+      </div>
       {/* 1. LEFT PERSISTENT SIDEBAR (Desktop / Tablet) */}
       <div className="hidden md:block shrink-0">
         <Sidebar
@@ -84,8 +130,8 @@ export const AppShell: React.FC = () => {
 
       {/* 2. MAIN APPLICATION COLUMN */}
       <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
-        {/* Compact Top Header Bar */}
-        <TopHeader
+        {/* ── The Helm of War — Mythic Global Header ── */}
+        <CrucibleHeader
           activeTab={activeTab}
           onSelectTab={(tab) => {
             setActiveTab(tab)
@@ -114,7 +160,6 @@ export const AppShell: React.FC = () => {
               : null
           }
           onOpenLumi={() => {
-            // Trigger floating Lumi button click or highlight
             const btn = document.querySelector('button[title="Ask Lumi AI Mentor"]') as HTMLButtonElement | null
             btn?.click()
           }}
