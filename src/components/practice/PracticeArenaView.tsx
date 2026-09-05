@@ -14,7 +14,7 @@ import {
 import { LumiPixelBot, PixelPythonIcon } from '../brand/PixelArtAvatars'
 
 interface PracticeArenaViewProps {
-  onStartChallenge?: () => void
+  onStartChallenge?: (id?: string) => void
 }
 
 /* ─── Data ──────────────────────────────────────────────────────────────────── */
@@ -170,7 +170,7 @@ export const PracticeArenaView: React.FC<PracticeArenaViewProps> = ({ onStartCha
               <div className="flex items-center gap-3 pt-1 flex-wrap">
                 <button
                   type="button"
-                  onClick={onStartChallenge}
+                  onClick={() => onStartChallenge?.('reverse-string')}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md cursor-pointer transition-all active:scale-95"
                 >
                   Start Daily Challenge
@@ -265,7 +265,7 @@ export const PracticeArenaView: React.FC<PracticeArenaViewProps> = ({ onStartCha
                 <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={onStartChallenge}
+                    onClick={() => onStartChallenge?.('reverse-string')}
                     className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md cursor-pointer transition-all active:scale-95"
                   >
                     Start Challenge
@@ -413,7 +413,7 @@ export const PracticeArenaView: React.FC<PracticeArenaViewProps> = ({ onStartCha
                     ) : (
                       <button
                         type="button"
-                        onClick={onStartChallenge}
+                        onClick={() => onStartChallenge?.(c.id)}
                         className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-95 ${
                           c.isDaily
                             ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
