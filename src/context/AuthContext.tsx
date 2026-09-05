@@ -121,15 +121,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initializeAuth()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
-      setSession(currentSession)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       const currentUser = currentSession?.user ?? null
-      setUser(currentUser)
+      setSession(currentSession)
+
+      // Preserve user reference on background token refresh to prevent full app remounts
+      setUser((prevUser) => {
+        if (prevUser && currentUser && prevUser.id === currentUser.id && event === 'TOKEN_REFRESHED') {
+          return prevUser
+        }
+        return currentUser
+      })
 
       if (currentUser) {
-        const userProfile = await fetchProfile(currentUser)
-        setProfile(userProfile)
-        setRole(userProfile?.role || 'student')
+        // Avoid redundant profile queries on tab focus / token refresh
+        if (event !== 'TOKEN_REFRESHED') {
+          const userProfile = await fetchProfile(currentUser)
+          setProfile(userProfile)
+          setRole(userProfile?.role || 'student')
+        }
       } else {
         setProfile(null)
         setRole('student')

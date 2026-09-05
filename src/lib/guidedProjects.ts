@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabase'
 import { executeCode } from './execution'
 import { createCommunityPost } from './community'
+import { validateTodoStageBehavioral } from './guidedProjectValidation'
 
 export type GuidedProjectDifficulty = 'beginner' | 'intermediate' | 'advanced'
 export type GuidedProjectStatus = 'draft' | 'published'
@@ -24,7 +25,9 @@ export interface IOTestCase {
 }
 
 export interface ValidationConfig {
-  test_cases: IOTestCase[]
+  test_cases?: IOTestCase[]
+  tests?: any[]
+  [key: string]: any
 }
 
 export interface ProjectStage {
@@ -611,8 +614,9 @@ export async function createProjectStage(
 
     // Validate I/O test cases if provided
     const validationConfig: ValidationConfig = input.validation_config || { test_cases: [] }
-    if (validationType === 'io_test' && validationConfig.test_cases.length > 0) {
-      const hasInvalid = validationConfig.test_cases.some((tc) => !tc.expected_output || !tc.expected_output.trim())
+    const stageCases = getStageTestCases(validationConfig)
+    if (validationType === 'io_test' && stageCases.length > 0) {
+      const hasInvalid = stageCases.some((tc) => !tc.expected_output || !tc.expected_output.trim())
       if (hasInvalid) {
         return { error: 'Each test case must define an expected output.' }
       }
@@ -692,7 +696,8 @@ export async function updateProjectStage(
 
     if (input.validation_config !== undefined) {
       if (updates.validation_type === 'io_test' || !updates.validation_type) {
-        const hasInvalid = input.validation_config.test_cases?.some(
+        const checkCases = getStageTestCases(input.validation_config)
+        const hasInvalid = checkCases.some(
           (tc) => !tc.expected_output || !tc.expected_output.trim()
         )
         if (hasInvalid) {
@@ -888,6 +893,33 @@ export async function fetchPublishedGuidedProjects(
 }
 
 /**
+ * Fetches existing progress for a student on a guided project
+ */
+export async function getUserProjectProgress(
+  userId: string,
+  projectId: string
+): Promise<UserProjectProgress | null> {
+  try {
+    const { data, error } = await supabase
+      .from('user_project_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('project_id', projectId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Error fetching user project progress:', error)
+      return null
+    }
+
+    return (data as UserProjectProgress) || null
+  } catch (err) {
+    console.error('Unexpected error fetching user project progress:', err)
+    return null
+  }
+}
+
+/**
  * Loads student-facing project details, published stages, and computed stage lock states
  */
 export async function fetchStudentProjectDetails(
@@ -927,14 +959,7 @@ export async function fetchStudentProjectDetails(
     const stageProgressMap = new Map<string, UserStageProgress>()
 
     if (userId) {
-      const { data: prog } = await supabase
-        .from('user_project_progress')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('project_id', projectId)
-        .maybeSingle()
-
-      userProgress = prog || null
+      userProgress = await getUserProjectProgress(userId, projectId)
 
       const { data: stageProgs } = await supabase
         .from('user_stage_progress')
@@ -988,7 +1013,26 @@ export async function fetchStudentProjectDetails(
 }
 
 /**
- * Initializes or resumes a guided project for a student
+ * In-flight promise tracker for student start/resume requests to deduplicate
+ * simultaneous concurrent invocations within the same client session.
+ */
+const inFlightStartRequests = new Map<
+  string,
+  Promise<{
+    progress: UserProjectProgress | null
+    stages: StudentStageView[]
+    currentStage: StudentStageView | null
+    error?: string
+  }>
+>()
+
+/**
+ * Initializes or resumes a guided project for a student.
+ *
+ * Requirements:
+ * - If progress exists: resumes existing record, preserving stage order, status, and timestamps.
+ * - If progress does not exist: creates initial progress record (stage 1, in_progress, started_at).
+ * - Concurrency: safe against simultaneous start requests without uq_user_project_progress violation.
  */
 export async function startOrResumeProject(
   projectId: string,
@@ -997,18 +1041,47 @@ export async function startOrResumeProject(
   progress: UserProjectProgress | null
   stages: StudentStageView[]
   currentStage: StudentStageView | null
+  project?: GuidedProject | null
   error?: string
 }> {
-  try {
-    const details = await fetchStudentProjectDetails(projectId, userId)
-    if (details.error || !details.project) {
-      return { progress: null, stages: [], currentStage: null, error: details.error || 'Project not found.' }
-    }
+  const requestKey = `${userId}:${projectId}`
+  const ongoing = inFlightStartRequests.get(requestKey)
+  if (ongoing) {
+    return ongoing
+  }
 
-    let progress = details.userProgress
+  const executionPromise = (async () => {
+    try {
+      // 1. Fetch project details and any existing progress
+      const details = await fetchStudentProjectDetails(projectId, userId)
+      if (details.error || !details.project) {
+        return {
+          progress: null,
+          stages: [],
+          currentStage: null,
+          error: details.error || 'Project not found.',
+        }
+      }
 
-    // If student hasn't started yet, create progress record
-    if (!progress) {
+      let progress = details.userProgress
+
+      // 2. Resume flow: If progress already exists (in_progress or completed)
+      // Do NOT insert another record. Preserve current stage, status, timestamps, and resume.
+      if (progress) {
+        const activeStage =
+          details.stages.find((s) => s.is_current) ||
+          details.stages[0] ||
+          null
+
+        return {
+          progress,
+          stages: details.stages,
+          currentStage: activeStage,
+          project: details.project,
+        }
+      }
+
+      // 3. First start flow: If no progress exists, create initial progress record safely.
       const { data: newProg, error: createErr } = await supabase
         .from('user_project_progress')
         .insert({
@@ -1020,27 +1093,65 @@ export async function startOrResumeProject(
         .select('*')
         .single()
 
-      if (createErr || !newProg) {
-        return { progress: null, stages: [], currentStage: null, error: createErr?.message || 'Failed to start project.' }
+      if (createErr) {
+        // Safe against simultaneous start requests (unique constraint uq_user_project_progress violation)
+        if (
+          createErr.code === '23505' ||
+          createErr.message?.includes('uq_user_project_progress') ||
+          createErr.message?.includes('duplicate key')
+        ) {
+          const existingProg = await getUserProjectProgress(userId, projectId)
+          if (existingProg) {
+            progress = existingProg
+          } else {
+            return {
+              progress: null,
+              stages: [],
+              currentStage: null,
+              error: createErr.message || 'Failed to start project.',
+            }
+          }
+        } else {
+          return {
+            progress: null,
+            stages: [],
+            currentStage: null,
+            error: createErr.message || 'Failed to start project.',
+          }
+        }
+      } else {
+        progress = newProg as UserProjectProgress
       }
 
-      progress = newProg as UserProjectProgress
-    }
+      // 4. Refresh stages with the newly created progress record
+      const refreshedDetails = await fetchStudentProjectDetails(projectId, userId)
+      const activeStage =
+        refreshedDetails.stages.find((s) => s.is_current) ||
+        refreshedDetails.stages[0] ||
+        null
 
-    // Refresh stages with newly created progress
-    const refreshedDetails = await fetchStudentProjectDetails(projectId, userId)
-    const activeStage =
-      refreshedDetails.stages.find((s) => s.is_current) ||
-      refreshedDetails.stages[0] ||
-      null
-
-    return {
-      progress,
-      stages: refreshedDetails.stages,
-      currentStage: activeStage,
+      return {
+        progress,
+        stages: refreshedDetails.stages,
+        currentStage: activeStage,
+        project: details.project,
+      }
+    } catch (err: any) {
+      return {
+        progress: null,
+        stages: [],
+        currentStage: null,
+        error: err?.message || 'Error starting project.',
+      }
     }
-  } catch (err: any) {
-    return { progress: null, stages: [], currentStage: null, error: err?.message || 'Error starting project.' }
+  })()
+
+  inFlightStartRequests.set(requestKey, executionPromise)
+
+  try {
+    return await executionPromise
+  } finally {
+    inFlightStartRequests.delete(requestKey)
   }
 }
 
@@ -1110,6 +1221,54 @@ export async function fetchStudentStageCode(
 
 function normalizeOutput(str: string): string {
   return str.replace(/\r\n/g, '\n').trimEnd()
+}
+
+/**
+ * Normalizes test cases from various config formats ({ tests: [...] }, { test_cases: [...] }, etc.)
+ */
+export function getStageTestCases(config: any): IOTestCase[] {
+  if (!config) return []
+  const rawList = Array.isArray(config.tests)
+    ? config.tests
+    : Array.isArray(config.test_cases)
+    ? config.test_cases
+    : Array.isArray(config.testCases)
+    ? config.testCases
+    : []
+
+  return rawList.map((tc: any) => ({
+    input: String(tc.input ?? ''),
+    expected_output: String(tc.expected_output ?? tc.expectedOutput ?? ''),
+    is_hidden: Boolean(tc.is_hidden ?? tc.isHidden),
+  }))
+}
+
+/**
+ * Robustly checks if actual output matches expected output.
+ * Supports exact trimmed matching and deep JSON comparison for structured object outputs.
+ */
+export function areOutputsEqual(actual: string, expected: string): boolean {
+  const normActual = normalizeOutput(actual || '')
+  const normExpected = normalizeOutput(expected || '')
+  if (normActual === normExpected) return true
+
+  // Try parsing both as JSON (for stages with structured JSON output where key order may differ)
+  try {
+    const actualJson = JSON.parse(normActual)
+    const expectedJson = JSON.parse(normExpected)
+    if (
+      typeof actualJson === 'object' &&
+      actualJson !== null &&
+      typeof expectedJson === 'object' &&
+      expectedJson !== null
+    ) {
+      return JSON.stringify(actualJson) === JSON.stringify(expectedJson)
+    }
+  } catch {
+    // Non-JSON or parsing failure - fallback to false
+  }
+
+  return false
 }
 
 /**
@@ -1192,8 +1351,8 @@ export async function submitAndValidateStage({
       }
     }
 
-    // 4. Retrieve configured test cases
-    const testCases: IOTestCase[] = stage.validation_config?.test_cases || []
+    // 4. Retrieve configured test cases (handles both 'tests' and 'test_cases')
+    const testCases: IOTestCase[] = getStageTestCases(stage.validation_config)
     if (testCases.length === 0) {
       return {
         passed: false,
@@ -1205,61 +1364,93 @@ export async function submitAndValidateStage({
       }
     }
 
-    // 5. Run test cases via unified execution engine
-    const testResults: StageTestCaseResult[] = []
+    // 5. Run test cases via unified execution engine (with behavioral validation for Todo List)
+    let testResults: StageTestCaseResult[] = []
     let overallExecutionStatus: StageSubmissionResult['executionStatus'] = 'passed'
 
-    for (let i = 0; i < testCases.length; i++) {
-      const tc = testCases[i]
-      const execRes = await executeCode(language, code, tc.input || '')
+    if (projectId === 'cdd3a825-80fe-4cf1-a3a3-349871d15598') {
+      const behavioral = await validateTodoStageBehavioral(stage.stage_order, code)
+      if (behavioral.passed) {
+        testResults = behavioral.testResults
+        overallExecutionStatus = 'passed'
+      } else {
+        // Fallback: evaluate standard I/O test in case code explicitly matched configured output
+        let stdPassed = false
+        const stdResults: StageTestCaseResult[] = []
+        for (let i = 0; i < testCases.length; i++) {
+          const tc = testCases[i]
+          const execRes = await executeCode(language, code, tc.input || '')
+          const match = areOutputsEqual(execRes.stdout || '', tc.expected_output || '')
+          stdResults.push({
+            orderIndex: i + 1,
+            isHidden: Boolean(tc.is_hidden),
+            passed: match,
+            actualOutput: execRes.stdout,
+            expectedOutput: tc.expected_output,
+            error: match ? undefined : execRes.stderr || behavioral.error || 'Output did not match requirements.',
+          })
+        }
+        stdPassed = stdResults.length > 0 && stdResults.every((t) => t.passed)
+        if (stdPassed) {
+          testResults = stdResults
+          overallExecutionStatus = 'passed'
+        } else {
+          testResults = behavioral.testResults
+          overallExecutionStatus = 'failed'
+        }
+      }
+    } else {
+      // Standard I/O test cases
+      for (let i = 0; i < testCases.length; i++) {
+        const tc = testCases[i]
+        const execRes = await executeCode(language, code, tc.input || '')
 
-      if (execRes.status === 'compile_error' || execRes.status === 'error') {
-        overallExecutionStatus = 'execution_error'
+        if (execRes.status === 'compile_error' || execRes.status === 'error') {
+          overallExecutionStatus = 'execution_error'
+          testResults.push({
+            orderIndex: i + 1,
+            isHidden: Boolean(tc.is_hidden),
+            passed: false,
+            actualOutput: execRes.stdout,
+            expectedOutput: tc.expected_output,
+            error: execRes.stderr || 'Execution or syntax error.',
+          })
+          break
+        }
+
+        if (execRes.status === 'timeout') {
+          overallExecutionStatus = 'timeout'
+          testResults.push({
+            orderIndex: i + 1,
+            isHidden: Boolean(tc.is_hidden),
+            passed: false,
+            actualOutput: execRes.stdout,
+            expectedOutput: tc.expected_output,
+            error: 'Execution timed out (10-second limit exceeded).',
+          })
+          break
+        }
+
+        const passed = areOutputsEqual(execRes.stdout || '', tc.expected_output || '')
+
+        if (!passed && overallExecutionStatus === 'passed') {
+          overallExecutionStatus = 'failed'
+        }
+
         testResults.push({
           orderIndex: i + 1,
           isHidden: Boolean(tc.is_hidden),
-          passed: false,
+          passed,
           actualOutput: execRes.stdout,
           expectedOutput: tc.expected_output,
-          error: execRes.stderr || 'Execution or syntax error.',
+          error: execRes.stderr || undefined,
         })
-        break
       }
-
-      if (execRes.status === 'timeout') {
-        overallExecutionStatus = 'timeout'
-        testResults.push({
-          orderIndex: i + 1,
-          isHidden: Boolean(tc.is_hidden),
-          passed: false,
-          actualOutput: execRes.stdout,
-          expectedOutput: tc.expected_output,
-          error: 'Execution timed out (10-second limit exceeded).',
-        })
-        break
-      }
-
-      const normActual = normalizeOutput(execRes.stdout || '')
-      const normExpected = normalizeOutput(tc.expected_output || '')
-      const passed = normActual === normExpected
-
-      if (!passed && overallExecutionStatus === 'passed') {
-        overallExecutionStatus = 'failed'
-      }
-
-      testResults.push({
-        orderIndex: i + 1,
-        isHidden: Boolean(tc.is_hidden),
-        passed,
-        actualOutput: execRes.stdout,
-        expectedOutput: tc.expected_output,
-        error: execRes.stderr || undefined,
-      })
     }
 
     const allPassed =
       overallExecutionStatus === 'passed' &&
-      testResults.length === testCases.length &&
+      testResults.length > 0 &&
       testResults.every((t) => t.passed)
 
     // 6. Invoke server-authoritative progression RPC

@@ -5,7 +5,6 @@ import { AppShell } from './components/layout/AppShell'
 import { AdminShell } from './components/layout/AdminShell'
 import { GameToaster } from './components/ui/GameToast'
 import { CodeQuestOnboardingFlow } from './components/onboarding/CodeQuestOnboardingFlow'
-import { Loader2 } from 'lucide-react'
 
 const MainApp: React.FC = () => {
   const { user, loading, isAdmin } = useAuth()
@@ -15,13 +14,29 @@ const MainApp: React.FC = () => {
   // 1. Loading State
   if (loading) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#f8fafc] text-slate-900 gap-4 font-sans">
-        <div className="h-14 w-14 bg-emerald-600 border-2 border-b-4 border-emerald-700 rounded-3xl flex items-center justify-center text-white font-mono font-black text-xl shadow-xl animate-bounce">
-          &gt;_
+      <div className="min-h-screen w-full flex flex-col items-center justify-center gap-5" style={{ background: '#070505' }}>
+        {/* Omega glyph loader */}
+        <div
+          className="flex items-center justify-center text-red-600 animate-pulse"
+          style={{
+            fontFamily: "'Cinzel Decorative', serif",
+            fontSize: '72px',
+            lineHeight: 1,
+            filter: 'drop-shadow(0 0 40px rgba(220,38,38,0.6))',
+          }}
+        >
+          Ω
         </div>
-        <div className="flex items-center gap-2 font-pixel text-xs text-emerald-600 font-bold uppercase tracking-wider">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span>CONNECTING TO CODEQUEST REALM...</span>
+        <div
+          className="flex items-center gap-2 text-red-500/80 text-[11px] uppercase tracking-[0.35em]"
+          style={{ fontFamily: "'Cinzel', serif" }}
+        >
+          <span>Entering the Crucible</span>
+          <span className="inline-flex gap-1">
+            <span className="w-1 h-1 rounded-full bg-red-600 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1 h-1 rounded-full bg-red-600 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1 h-1 rounded-full bg-red-600 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </span>
         </div>
       </div>
     )
@@ -33,7 +48,7 @@ const MainApp: React.FC = () => {
       <>
         <AuthPage onOpenOnboarding={() => setShowPreviewOnboarding(true)} />
         {showPreviewOnboarding && (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
+          <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: '#070505' }}>
             <CodeQuestOnboardingFlow onComplete={() => setShowPreviewOnboarding(false)} />
           </div>
         )}
@@ -47,7 +62,7 @@ const MainApp: React.FC = () => {
   
   if (!hasOnboarded && !isAdmin) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
+      <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: '#070505' }}>
         <CodeQuestOnboardingFlow onComplete={() => {
           localStorage.setItem(`onboarded_${user.id}`, 'true')
           setHasCompletedOnboarding(true)
